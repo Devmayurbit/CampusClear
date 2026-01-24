@@ -12,6 +12,8 @@ import Profile from "@/pages/profile";
 import NotFound from "@/pages/not-found";
 import Home from "./pages/Home";
 import Footer from "@/components/Footer";
+import NoDues from "@/pages/nodues";
+
 
 function Router() {
   return (
@@ -21,6 +23,7 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/profile" component={Profile} />
+      <Route path="/nodues" component={NoDues} />
       <Route component={NotFound} />
     </Switch>
   );

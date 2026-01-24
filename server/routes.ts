@@ -6,6 +6,13 @@ import multer from "multer";
 import path from "path";
 import Student from "./models/Student";
 import "dotenv/config";
+import NoDues from "./models/NoDues";
+import { sendVerificationMail } from "./mailer";
+import crypto from "crypto";
+import crypto from "crypto";
+import NoDues from "./models/NoDues";
+import { sendVerificationEmail } from "./mailer";
+
 
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
@@ -117,6 +124,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Login failed" });
     }
   });
+
+  // ================= NO DUES FORM =================
+
+app.post("/api/nodues", authenticateToken, async (req: any, res) => {
+  try {
+    const token = crypto.randomBytes(32).toString("hex");
+
+    const record = await NoDues.create({
+      ...req.body,
+      studentId: req.student.id,
+      verificationToken: token,
+    });
+
+    const verifyLink = `http://localhost:5000/api/nodues/verify/${token}`;
+
+    await sendVerificationMail(record.email, verifyLink);
+
+    res.json({
+      message: "No-Dues submitted. Verification email sent.",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to submit No-Dues form" });
+  }
+});
+
+// Verify Email
+app.get("/api/nodues/verify/:token", async (req, res) => {
+  try {
+    const record = await NoDues.findOne({
+      verificationToken: req.params.token,
+    });
+
+    if (!record) {
+      return res.send("<h2>Invalid or expired link</h2>");
+    }
+
+    record.verified = true;
+    record.verificationToken = "";
+    await record.save();
+
+    res.send("<h2>✅ Your No-Dues request has been verified!</h2>");
+  } catch {
+    res.send("<h2>Verification failed</h2>");
+  }
+});
+// ================= VERIFY =================
+
+app.get("/api/nodues/verify/:token", async (req, res) => {
+  try {
+    const record = await NoDues.findOne({
+      verificationToken: req.params.token,
+    });
+
+    if (!record) {
+      return res.status(400).send("Invalid or expired token");
+    }
+
+    record.isVerified = true;
+    record.status = "VERIFIED";
+    record.verificationToken = "";
+    await record.save();
+
+    res.send(`
+      <h2>✅ Verification Successful</h2>
+      <p>Your No-Dues application is verified successfully.</p>
+    `);
+  } catch (err) {
+    res.status(500).send("Verification failed");
+  }
+});
+// ================= NO DUES CREATE =================
+
+app.post("/api/nodues", authenticateToken, async (req: any, res) => {
+  try {
+    const token = crypto.randomBytes(32).toString("hex");
+
+    const form = await NoDues.create({
+      ...req.body,
+      studentId: req.student.id,
+      verificationToken: token,
+    });
+
+    const verifyLink = `http://localhost:5000/api/nodues/verify/${token}`;
+
+    await sendVerificationEmail(form.email, verifyLink);
+
+    res.status(201).json({
+      message: "Application submitted. Verification email sent.",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to submit application" });
+  }
+});
 
   // ================= PROFILE =================
   app.get("/api/profile", authenticateToken, async (req: any, res) => {
