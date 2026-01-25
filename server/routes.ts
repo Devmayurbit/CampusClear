@@ -3,16 +3,13 @@ import { createServer, type Server } from "http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
-import path from "path";
 import Student from "./models/Student";
-import "dotenv/config";
 import NoDues from "./models/NoDues";
-import { sendVerificationMail } from "./mailer";
 import crypto from "crypto";
-import crypto from "crypto";
-import NoDues from "./models/NoDues";
-import { sendVerificationEmail } from "./mailer";
-
+import {
+  sendVerificationEmail,
+  sendNoDuesSubmittedEmail,
+} from "./mailer";
 
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
@@ -21,6 +18,7 @@ const upload = multer({
   limits: { fileSize: 2 * 1024 * 1024 },
 });
 
+// ---------------- AUTH MIDDLEWARE ----------------
 function authenticateToken(req: any, res: any, next: any) {
   const authHeader = req.headers["authorization"];
   const token = authHeader?.split(" ")[1];
@@ -34,19 +32,13 @@ function authenticateToken(req: any, res: any, next: any) {
   });
 }
 
+// ---------------- ROUTES ----------------
 export async function registerRoutes(app: Express): Promise<Server> {
 
   // ================= REGISTER =================
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const {
-        fullName,
-        enrollmentNo,
-        email,
-        password,
-        program,
-        batch,
-      } = req.body;
+      const { fullName, enrollmentNo, email, password, program, batch } = req.body;
 
       if (!fullName || !enrollmentNo || !email || !password) {
         return res.status(400).json({ message: "All fields required" });
@@ -62,6 +54,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const hashedPassword = await bcrypt.hash(password, 12);
 
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+
       const student = await Student.create({
         fullName,
         enrollmentNo,
@@ -69,23 +63,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: hashedPassword,
         program,
         batch,
+        isVerified: false,
+        verificationToken,
       });
 
-      const token = jwt.sign({ id: student._id }, JWT_SECRET, {
-        expiresIn: "7d",
-      });
+      const verifyLink = `http://localhost:5000/api/auth/verify/${verificationToken}`;
 
-      const data = student.toObject();
-      delete data.password;
+      await sendVerificationEmail(email, verifyLink);
 
       res.status(201).json({
-        message: "Student registered successfully",
-        student: data,
-        token,
+        message: "Registered successfully. Verification email sent.",
       });
+
     } catch (error) {
       console.error(error);
       res.status(500).json({ message: "Register failed" });
+    }
+  });
+
+  // ================= VERIFY ACCOUNT =================
+  app.get("/api/auth/verify/:token", async (req, res) => {
+    try {
+      const student = await Student.findOne({
+        verificationToken: req.params.token,
+      });
+
+      if (!student) {
+        return res.send("<h2>❌ Invalid or expired verification link</h2>");
+      }
+
+      student.isVerified = true;
+      student.verificationToken = "";
+      await student.save();
+
+      res.send("<h2>✅ Account Verified Successfully. You may login now.</h2>");
+    } catch {
+      res.send("<h2>Verification failed</h2>");
     }
   });
 
@@ -98,9 +111,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "All fields required" });
       }
 
-      const student = await Student.findOne({ enrollmentNo });
+      const student: any = await Student.findOne({ enrollmentNo });
+
       if (!student) {
         return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      if (!student.isVerified) {
+        return res.status(401).json({ message: "Please verify your email first" });
       }
 
       const valid = await bcrypt.compare(password, student.password);
@@ -125,100 +143,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ================= NO DUES FORM =================
+  // ================= NO DUES SUBMIT =================
+  app.post("/api/nodues", authenticateToken, async (req: any, res) => {
+    try {
+      const existing = await NoDues.findOne({
+        studentId: req.student.id,
+      });
 
-app.post("/api/nodues", authenticateToken, async (req: any, res) => {
-  try {
-    const token = crypto.randomBytes(32).toString("hex");
+      if (existing) {
+        return res.status(400).json({
+          message: "You already submitted No-Dues request",
+        });
+      }
 
-    const record = await NoDues.create({
-      ...req.body,
-      studentId: req.student.id,
-      verificationToken: token,
-    });
+      const form = await NoDues.create({
+        ...req.body,
+        studentId: req.student.id,
+        status: "PENDING",
+      });
 
-    const verifyLink = `http://localhost:5000/api/nodues/verify/${token}`;
+      await sendNoDuesSubmittedEmail(form.email);
 
-    await sendVerificationMail(record.email, verifyLink);
+      res.status(201).json({
+        message: "No-Dues submitted successfully. Confirmation email sent.",
+      });
 
-    res.json({
-      message: "No-Dues submitted. Verification email sent.",
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to submit No-Dues form" });
-  }
-});
-
-// Verify Email
-app.get("/api/nodues/verify/:token", async (req, res) => {
-  try {
-    const record = await NoDues.findOne({
-      verificationToken: req.params.token,
-    });
-
-    if (!record) {
-      return res.send("<h2>Invalid or expired link</h2>");
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: "Failed to submit No-Dues form" });
     }
-
-    record.verified = true;
-    record.verificationToken = "";
-    await record.save();
-
-    res.send("<h2>✅ Your No-Dues request has been verified!</h2>");
-  } catch {
-    res.send("<h2>Verification failed</h2>");
-  }
-});
-// ================= VERIFY =================
-
-app.get("/api/nodues/verify/:token", async (req, res) => {
-  try {
-    const record = await NoDues.findOne({
-      verificationToken: req.params.token,
-    });
-
-    if (!record) {
-      return res.status(400).send("Invalid or expired token");
-    }
-
-    record.isVerified = true;
-    record.status = "VERIFIED";
-    record.verificationToken = "";
-    await record.save();
-
-    res.send(`
-      <h2>✅ Verification Successful</h2>
-      <p>Your No-Dues application is verified successfully.</p>
-    `);
-  } catch (err) {
-    res.status(500).send("Verification failed");
-  }
-});
-// ================= NO DUES CREATE =================
-
-app.post("/api/nodues", authenticateToken, async (req: any, res) => {
-  try {
-    const token = crypto.randomBytes(32).toString("hex");
-
-    const form = await NoDues.create({
-      ...req.body,
-      studentId: req.student.id,
-      verificationToken: token,
-    });
-
-    const verifyLink = `http://localhost:5000/api/nodues/verify/${token}`;
-
-    await sendVerificationEmail(form.email, verifyLink);
-
-    res.status(201).json({
-      message: "Application submitted. Verification email sent.",
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Failed to submit application" });
-  }
-});
+  });
 
   // ================= PROFILE =================
   app.get("/api/profile", authenticateToken, async (req: any, res) => {

@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { authApi, getAuthToken, setAuthToken, removeAuthToken } from "@/lib/auth";
@@ -16,32 +16,63 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ✅ Restore student from localStorage (page refresh safe)
+const getStoredStudent = (): Student | null => {
+  try {
+    const raw = localStorage.getItem("student");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const token = getAuthToken();
 
-  const { data: student, isLoading } = useQuery({
-  queryKey: ["/api/profile"],
-  enabled: !!token,
-  retry: false,
-  onError: () => {
-    // Token invalid or expired → clean silently
-    removeAuthToken();
-    queryClient.clear();
-  },
-});
+  const [studentState, setStudentState] = useState<Student | null>(
+    getStoredStudent()
+  );
 
+  // ---------------------------
+  // Load profile if token exists
+  // ---------------------------
+  const { isLoading } = useQuery({
+    queryKey: ["/api/profile"],
+    enabled: !!token,
+    retry: false,
+    onSuccess: (profile) => {
+      setStudentState(profile);
+      localStorage.setItem("student", JSON.stringify(profile));
+    },
+    onError: () => {
+      removeAuthToken();
+      localStorage.removeItem("student");
+      setStudentState(null);
+      queryClient.clear();
+    },
+  });
+
+  // ---------------------------
+  // Login mutation
+  // ---------------------------
   const loginMutation = useMutation({
     mutationFn: authApi.login,
     onSuccess: (data) => {
       setAuthToken(data.token);
+
+      setStudentState(data.student);
+      localStorage.setItem("student", JSON.stringify(data.student));
+
       queryClient.setQueryData(["/api/profile"], data.student);
+
       toast({
         title: "Welcome back!",
         description: "Successfully logged in.",
       });
+
       setLocation("/dashboard");
     },
     onError: (error: Error) => {
@@ -53,15 +84,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
+  // ---------------------------
+  // Register mutation
+  // ---------------------------
   const registerMutation = useMutation({
     mutationFn: authApi.register,
     onSuccess: (data) => {
       setAuthToken(data.token);
+
+      setStudentState(data.student);
+      localStorage.setItem("student", JSON.stringify(data.student));
+
       queryClient.setQueryData(["/api/profile"], data.student);
+
       toast({
         title: "Account created!",
         description: "Welcome to CDGI No-Dues System.",
       });
+
       setLocation("/dashboard");
     },
     onError: (error: Error) => {
@@ -73,6 +113,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
+  // ---------------------------
+  // Actions
+  // ---------------------------
   const login = async (data: LoginData) => {
     await loginMutation.mutateAsync(data);
   };
@@ -83,21 +126,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     removeAuthToken();
+    localStorage.removeItem("student");
+    setStudentState(null);
     queryClient.clear();
+
     toast({
       title: "Logged out",
       description: "See you next time!",
     });
+
     setLocation("/");
   };
 
+  // ---------------------------
+  // Context value
+  // ---------------------------
   const contextValue = {
-    student: student || null,
-    isLoading: isLoading || loginMutation.isPending || registerMutation.isPending,
+    student: studentState,
+    isLoading:
+      isLoading ||
+      loginMutation.isPending ||
+      registerMutation.isPending,
+
     login,
     register,
     logout,
-    isAuthenticated: !!token && !!student,
+
+    // ✅ Auth based only on token existence
+    isAuthenticated: !!token,
   };
 
   return (
@@ -107,6 +163,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ---------------------------
+// Hook
+// ---------------------------
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {

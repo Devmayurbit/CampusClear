@@ -2,7 +2,13 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { connectDB } from "./db";
-import "dotenv/config";
+import dotenv from "dotenv";
+dotenv.config({ path: ".env" });   // 👈 force load env
+console.log("ENV CHECK:", {
+  EMAIL_USER: process.env.EMAIL_USER,
+  EMAIL_PASS: process.env.EMAIL_PASS ? "LOADED" : "MISSING",
+});
+
 
 const app = express();
 app.use(express.json());

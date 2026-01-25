@@ -1,83 +1,78 @@
-import { Link } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 
 export default function Home() {
-  return (
-    <div className="w-full">
+  const { isAuthenticated, student } = useAuth();
+  const [, setLocation] = useLocation();
 
-      {/* HERO SECTION WITH FULL BACKGROUND IMAGE */}
+  return (
+    <div className="w-full overflow-hidden">
+
+      {/* HERO */}
       <section
-        className="relative min-h-screen bg-cover bg-center flex flex-col"
+        className="relative min-h-[90vh] bg-cover bg-center flex items-center"
         style={{
           backgroundImage: "url('/images/campuss.jpg')",
         }}
       >
-        {/* Dark Overlay */}
-        <div className="absolute inset-0 bg-black/50"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-black/40" />
 
-        {/* NAVBAR */}
-        <nav className="relative z-10 flex justify-between items-center px-10 py-6 text-white">
-          <div className="text-2xl font-bold flex items-center gap-2">
-            🎓 CDGI No-Dues Portal
-          </div>
+        <div className="relative z-10 max-w-7xl mx-auto px-8 py-20 text-white">
+          <h1 className="text-5xl md:text-6xl font-extrabold leading-tight animate-fade-in">
+            No-Dues Management System
+          </h1>
 
-          <div className="flex gap-6 items-center">
-            <Link href="/login" className="hover:underline">
-              Login
-            </Link>
+          <p className="mt-6 max-w-2xl text-lg text-gray-200 animate-slide-up">
+            A modern digital platform to simplify student clearance, verification
+            and approvals across all departments in seconds.
+          </p>
 
-            <Link
-              href="/register"
-              className="bg-white text-black px-5 py-2 rounded-md font-semibold hover:bg-gray-200 transition"
-            >
-              Sign Up
-            </Link>
-          </div>
-        </nav>
-
-        {/* HERO CONTENT */}
-        <div className="relative z-10 flex-1 flex items-center px-10">
-          <div className="max-w-2xl text-white">
-            <h1 className="text-5xl md:text-6xl font-extrabold leading-tight">
-              No-Dues Management System
-            </h1>
-
-            <p className="mt-6 text-lg text-gray-200">
-              A smart digital platform to simplify student clearance and
-              verification across all departments in seconds.
-            </p>
-
-            <div className="mt-10 flex gap-4">
-              <Link
-                href="/login"
-                className="bg-green-500 hover:bg-green-600 px-8 py-3 rounded-lg font-semibold transition"
+          {!isAuthenticated ? (
+            <div className="mt-10 flex flex-wrap gap-4">
+              <button
+                onClick={() => setLocation("/login")}
+                className="px-8 py-3 rounded-xl bg-green-500 hover:bg-green-600 transition shadow-lg"
               >
                 Get Started →
-              </Link>
+              </button>
 
-              <Link
-                href="/register"
-                className="border border-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-black transition"
+              <button
+                onClick={() => setLocation("/register")}
+                className="px-8 py-3 rounded-xl border border-white hover:bg-white hover:text-black transition"
               >
                 Create Account
-              </Link>
+              </button>
             </div>
-          </div>
+          ) : (
+            <div className="mt-10 space-y-4">
+              <h2 className="text-xl font-semibold">
+                Welcome back, {student?.fullName} 👋
+              </h2>
+
+              <button
+                onClick={() => setLocation("/dashboard")}
+                className="px-10 py-4 rounded-xl bg-primary-600 hover:bg-primary-700 transition shadow-lg"
+              >
+                Go To Dashboard →
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
-      {/* FEATURES SECTION */}
-      <section className="bg-white px-12 py-20">
+      {/* FEATURES */}
+      <section className="bg-white px-6 md:px-12 py-24">
         <h2 className="text-4xl font-bold text-center mb-16">
-          Why Use No-Dues Portal?
+          Why Choose CDGI No-Dues?
         </h2>
 
-        <div className="grid md:grid-cols-3 gap-10 max-w-6xl mx-auto">
-          <Feature title="⚡ Apply No-due" desc="No paperwork and no long queues. Track everything digitally." />
-          <Feature title="🔒 Secure Login" desc="JWT based authentication with encrypted credentials." />
-          <Feature title="📊 Live Status" desc="Real-time clearance updates from all departments." />
-          <Feature title="💳 Payment Tracking" desc="View pending dues and payment history easily." />
-          <Feature title="📁 Profile Management" desc="Update personal details and upload documents." />
-          <Feature title="☁ Cloud Powered" desc="MongoDB Atlas ensures scalability and reliability." />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-10 max-w-6xl mx-auto">
+          <Feature title="⚡ Instant Apply" desc="No paperwork and zero queues. Submit digitally." />
+          <Feature title="🔐 Secure Access" desc="JWT authentication with encrypted sessions." />
+          <Feature title="📊 Live Tracking" desc="Track every department approval in real time." />
+          <Feature title="📁 Profile Control" desc="Manage documents and personal details easily." />
+          <Feature title="☁ Cloud Powered" desc="MongoDB Atlas ensures speed and scalability." />
+          <Feature title="🎯 Smart Workflow" desc="Automated approvals and notifications." />
         </div>
       </section>
     </div>
@@ -86,7 +81,7 @@ export default function Home() {
 
 function Feature({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="p-8 rounded-xl border shadow hover:shadow-lg transition">
+    <div className="p-8 rounded-2xl border shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 bg-white">
       <h3 className="text-xl font-semibold mb-3">{title}</h3>
       <p className="text-gray-600">{desc}</p>
     </div>
