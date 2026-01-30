@@ -1,235 +1,226 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { loginSchema, registerSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
-import path from "path";
-import { z } from "zod";
-import { fromZodError } from "zod-validation-error";
+import Student from "./models/Student";
+import NoDues from "./models/NoDues";
+import crypto from "crypto";
+import {
+  sendVerificationEmail,
+  sendNoDuesSubmittedEmail,
+} from "./mailer";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET || "secret";
+
 const upload = multer({
   dest: "uploads/",
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
-    const extName = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimeType = allowedTypes.test(file.mimetype);
-
-    if (mimeType && extName) {
-      return cb(null, true);
-    } else {
-      cb(new Error("Only image files are allowed"));
-    }
-  },
+  limits: { fileSize: 2 * 1024 * 1024 },
 });
 
-// Middleware to verify JWT token
+// ---------------- AUTH MIDDLEWARE ----------------
 function authenticateToken(req: any, res: any, next: any) {
   const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
+  const token = authHeader?.split(" ")[1];
 
-  if (!token) {
-    return res.status(401).json({ message: "Access token required" });
-  }
+  if (!token) return res.status(401).json({ message: "Access token required" });
 
-  jwt.verify(token, JWT_SECRET, (err: any, student: any) => {
-    if (err) {
-      return res.status(403).json({ message: "Invalid or expired token" });
-    }
-    req.student = student;
+  jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
+    if (err) return res.status(403).json({ message: "Invalid token" });
+    req.student = decoded;
     next();
   });
 }
 
+// ---------------- ROUTES ----------------
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth routes
+
+  // ================= REGISTER =================
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const validatedData = registerSchema.parse(req.body);
-      
-      // Check if student already exists
-      const existingStudent = await storage.getStudentByEnrollment(validatedData.enrollmentNo);
-      if (existingStudent) {
-        return res.status(400).json({ message: "Student with this enrollment number already exists" });
+      const { fullName, enrollmentNo, email, password, program, batch } = req.body;
+
+      if (!fullName || !enrollmentNo || !email || !password) {
+        return res.status(400).json({ message: "All fields required" });
       }
 
-      const existingEmail = await storage.getStudentByEmail(validatedData.email);
-      if (existingEmail) {
-        return res.status(400).json({ message: "Student with this email already exists" });
-      }
-
-      // Hash password
-      const hashedPassword = await bcrypt.hash(validatedData.password, 12);
-
-      // Create student
-      const student = await storage.createStudent({
-        ...validatedData,
-        password: hashedPassword,
+      const exists = await Student.findOne({
+        $or: [{ enrollmentNo }, { email }],
       });
 
-      // Generate JWT token
-      const token = jwt.sign(
-        { id: student.id, enrollmentNo: student.enrollmentNo },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+      if (exists) {
+        return res.status(400).json({ message: "Student already exists" });
+      }
 
-      // Remove password from response
-      const { password: _, ...studentWithoutPassword } = student;
+      const hashedPassword = await bcrypt.hash(password, 12);
+
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+
+      const student = await Student.create({
+        fullName,
+        enrollmentNo,
+        email,
+        password: hashedPassword,
+        program,
+        batch,
+        isVerified: false,
+        verificationToken,
+      });
+
+      const verifyLink = `http://localhost:5000/api/auth/verify/${verificationToken}`;
+
+      await sendVerificationEmail(email, verifyLink);
 
       res.status(201).json({
-        message: "Student registered successfully",
-        student: studentWithoutPassword,
-        token,
+        message: "Registered successfully. Verification email sent.",
       });
+
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.toString() });
-      }
-      res.status(500).json({ message: "Internal server error" });
+      console.error(error);
+      res.status(500).json({ message: "Register failed" });
     }
   });
 
+  // ================= VERIFY ACCOUNT =================
+  app.get("/api/auth/verify/:token", async (req, res) => {
+    try {
+      const student = await Student.findOne({
+        verificationToken: req.params.token,
+      });
+
+      if (!student) {
+        return res.send("<h2>❌ Invalid or expired verification link</h2>");
+      }
+
+      student.isVerified = true;
+      student.verificationToken = "";
+      await student.save();
+
+      res.send("<h2>✅ Account Verified Successfully. You may login now.</h2>");
+    } catch {
+      res.send("<h2>Verification failed</h2>");
+    }
+  });
+
+  // ================= LOGIN =================
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const validatedData = loginSchema.parse(req.body);
+      const { enrollmentNo, password } = req.body;
 
-      // Find student
-      const student = await storage.getStudentByEnrollment(validatedData.enrollmentNo);
+      if (!enrollmentNo || !password) {
+        return res.status(400).json({ message: "All fields required" });
+      }
+
+      const student: any = await Student.findOne({ enrollmentNo });
+
       if (!student) {
-        return res.status(401).json({ message: "Invalid enrollment number or password" });
+        return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Verify password
-      const isValidPassword = await bcrypt.compare(validatedData.password, student.password);
-      if (!isValidPassword) {
-        return res.status(401).json({ message: "Invalid enrollment number or password" });
+      if (!student.isVerified) {
+        return res.status(401).json({ message: "Please verify your email first" });
       }
 
-      // Generate JWT token
-      const token = jwt.sign(
-        { id: student.id, enrollmentNo: student.enrollmentNo },
-        JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+      const valid = await bcrypt.compare(password, student.password);
+      if (!valid) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
 
-      // Remove password from response
-      const { password: _, ...studentWithoutPassword } = student;
+      const token = jwt.sign({ id: student._id }, JWT_SECRET, {
+        expiresIn: "7d",
+      });
+
+      const data = student.toObject();
+      delete data.password;
 
       res.json({
         message: "Login successful",
-        student: studentWithoutPassword,
+        student: data,
         token,
       });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.toString() });
-      }
-      res.status(500).json({ message: "Internal server error" });
+    } catch {
+      res.status(500).json({ message: "Login failed" });
     }
   });
 
-  // Protected routes
-  app.get("/api/profile", authenticateToken, async (req: any, res) => {
+  // ================= NO DUES SUBMIT =================
+  app.post("/api/nodues", authenticateToken, async (req: any, res) => {
     try {
-      const student = await storage.getStudent(req.student.id);
-      if (!student) {
-        return res.status(404).json({ message: "Student not found" });
+      const existing = await NoDues.findOne({
+        studentId: req.student.id,
+      });
+
+      if (existing) {
+        return res.status(400).json({
+          message: "You already submitted No-Dues request",
+        });
       }
 
-      const { password: _, ...studentWithoutPassword } = student;
-      res.json(studentWithoutPassword);
+      const form = await NoDues.create({
+        ...req.body,
+        studentId: req.student.id,
+        status: "PENDING",
+      });
+
+      await sendNoDuesSubmittedEmail(form.email);
+
+      res.status(201).json({
+        message: "No-Dues submitted successfully. Confirmation email sent.",
+      });
+
     } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
+      console.error(error);
+      res.status(500).json({ message: "Failed to submit No-Dues form" });
+    }
+  });
+
+  // ================= PROFILE =================
+  app.get("/api/profile", authenticateToken, async (req: any, res) => {
+    try {
+      const student = await Student.findById(req.student.id).select("-password");
+      if (!student) return res.status(404).json({ message: "Student not found" });
+      res.json(student);
+    } catch {
+      res.status(500).json({ message: "Profile fetch failed" });
     }
   });
 
   app.put("/api/profile", authenticateToken, async (req: any, res) => {
     try {
-      const updateData = req.body;
-      delete updateData.id;
-      delete updateData.enrollmentNo;
-      delete updateData.password;
-      delete updateData.createdAt;
+      const updated = await Student.findByIdAndUpdate(
+        req.student.id,
+        req.body,
+        { new: true }
+      ).select("-password");
 
-      const updatedStudent = await storage.updateStudent(req.student.id, updateData);
-      if (!updatedStudent) {
-        return res.status(404).json({ message: "Student not found" });
-      }
-
-      const { password: _, ...studentWithoutPassword } = updatedStudent;
       res.json({
         message: "Profile updated successfully",
-        student: studentWithoutPassword,
+        student: updated,
       });
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
+    } catch {
+      res.status(500).json({ message: "Profile update failed" });
     }
   });
 
-  app.post("/api/profile/photo", authenticateToken, upload.single("photo"), async (req: any, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
+  // ================= PHOTO UPLOAD =================
+  app.post(
+    "/api/profile/photo",
+    authenticateToken,
+    upload.single("photo"),
+    async (req: any, res) => {
+      try {
+        const photoPath = `/uploads/${req.file.filename}`;
+
+        await Student.findByIdAndUpdate(req.student.id, {
+          profilePhoto: photoPath,
+        });
+
+        res.json({ message: "Photo uploaded", photoPath });
+      } catch {
+        res.status(500).json({ message: "Upload failed" });
       }
-
-      const photoPath = `/uploads/${req.file.filename}`;
-      const updatedStudent = await storage.updateStudent(req.student.id, {
-        profilePhoto: photoPath,
-      });
-
-      if (!updatedStudent) {
-        return res.status(404).json({ message: "Student not found" });
-      }
-
-      res.json({
-        message: "Photo uploaded successfully",
-        photoPath,
-      });
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
     }
-  });
-
-  // Clearance routes
-  app.get("/api/clearances", authenticateToken, async (req: any, res) => {
-    try {
-      const clearances = await storage.getClearancesByStudent(req.student.id);
-      const departments = await storage.getAllDepartments();
-
-      const clearancesWithDepartments = clearances.map((clearance) => {
-        const department = departments.find((dept) => dept.id === clearance.departmentId);
-        return {
-          ...clearance,
-          department,
-        };
-      });
-
-      res.json(clearancesWithDepartments);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.get("/api/departments", async (req, res) => {
-    try {
-      const departments = await storage.getAllDepartments();
-      res.json(departments);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Serve uploaded files
-  app.use("/uploads", (req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    next();
-  });
+  );
 
   const httpServer = createServer(app);
   return httpServer;

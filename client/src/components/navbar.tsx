@@ -1,67 +1,118 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
+import clsx from "clsx";
+import { LogOut, Home, LayoutDashboard, User, LogIn } from "lucide-react";
 
 export default function Navbar() {
   const { isAuthenticated, logout, student } = useAuth();
   const [location, setLocation] = useLocation();
 
-  // Don't show navbar on login/register pages
-  if (location === "/login" || location === "/register" || location === "/") {
-    return null;
-  }
+  // Hide navbar only on auth pages
+  if (["/login", "/register"].includes(location)) return null;
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  const navItem = (path: string, active: boolean) =>
+    clsx(
+      "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300",
+      active
+        ? "bg-primary-600 text-white shadow-md scale-[1.02]"
+        : "text-gray-700 hover:bg-primary-50 hover:text-primary-700"
+    );
 
   return (
-    <nav className="bg-white shadow-lg border-b border-primary-100 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 flex items-center">
-              <div className="h-10 w-10 bg-gradient-to-r from-primary-500 to-primary-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                CDGI
-              </div>
-              <div className="ml-3">
-                <h1 className="text-xl font-bold text-gray-900">No-Dues System</h1>
-                <p className="text-xs text-gray-500">Chameli Devi Group of Institutions</p>
-              </div>
+    <nav className="sticky top-0 z-50 backdrop-blur-xl bg-white/70 border-b border-white/40 shadow-sm">
+      <div className="max-w-7xl mx-auto px-5">
+        <div className="h-16 flex items-center justify-between">
+
+          {/* Brand */}
+          <div
+            onClick={() => setLocation("/")}
+            className="flex items-center gap-3 cursor-pointer select-none"
+          >
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white flex items-center justify-center font-bold shadow">
+              CDGI
+            </div>
+            <div className="leading-tight hidden sm:block">
+              <p className="font-bold text-gray-900">No-Dues Portal</p>
+              <p className="text-xs text-gray-500">Chameli Devi Group</p>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              onClick={() => setLocation("/dashboard")}
-              className="text-gray-700 hover:text-primary-600"
+
+          {/* Center Navigation */}
+          <div className="hidden md:flex items-center gap-3">
+            <button
+              onClick={() => setLocation("/")}
+              className={navItem("/", location === "/")}
             >
-              <i className="fas fa-home mr-1"></i> Dashboard
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setLocation("/profile")}
-              className="text-gray-700 hover:text-primary-600"
-            >
-              <i className="fas fa-user mr-1"></i> Profile
-            </Button>
-            <div className="flex items-center space-x-2">
-              {student?.profilePhoto && (
-                <img
-                  src={student.profilePhoto}
-                  alt="Profile"
-                  className="w-8 h-8 rounded-full border-2 border-primary-200"
-                />
-              )}
-              <span className="text-sm font-medium text-gray-700">{student?.fullName}</span>
-            </div>
-            <Button
-              onClick={logout}
-              className="bg-primary-600 hover:bg-primary-700 text-white"
-            >
-              <i className="fas fa-sign-out-alt mr-1"></i> Logout
-            </Button>
+              <Home size={16} /> Home
+            </button>
+
+            {isAuthenticated && (
+              <>
+                <button
+                  onClick={() => setLocation("/dashboard")}
+                  className={navItem("/dashboard", location === "/dashboard")}
+                >
+                  <LayoutDashboard size={16} /> Dashboard
+                </button>
+
+                <button
+                  onClick={() => setLocation("/profile")}
+                  className={navItem("/profile", location === "/profile")}
+                >
+                  <User size={16} /> Profile
+                </button>
+              </>
+            )}
           </div>
+
+          {/* Right Side */}
+          <div className="flex items-center gap-4">
+            {!isAuthenticated ? (
+              <>
+                <button
+                  onClick={() => setLocation("/login")}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border hover:bg-gray-50 transition"
+                >
+                  <LogIn size={16} />
+                  Login
+                </button>
+
+                <button
+                  onClick={() => setLocation("/register")}
+                  className="px-5 py-2 rounded-xl bg-primary-600 text-white hover:bg-primary-700 transition shadow"
+                >
+                  Sign Up
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="hidden sm:flex items-center gap-2">
+                  {student?.profilePhoto ? (
+                    <img
+                      src={student.profilePhoto}
+                      className="h-9 w-9 rounded-full object-cover border"
+                    />
+                  ) : (
+                    <div className="h-9 w-9 rounded-full bg-primary-200 flex items-center justify-center font-semibold">
+                      {student?.fullName?.[0] || "U"}
+                    </div>
+                  )}
+                  <span className="text-sm font-medium text-gray-700">
+                    {student?.fullName}
+                  </span>
+                </div>
+
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500 text-white text-sm hover:bg-red-600 transition shadow"
+                >
+                  <LogOut size={16} />
+                  Logout
+                </button>
+              </>
+            )}
+          </div>
+
         </div>
       </div>
     </nav>
