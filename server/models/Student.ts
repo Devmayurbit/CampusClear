@@ -1,5 +1,8 @@
 import mongoose from "mongoose";
 
+// DEPRECATED: Use User model instead with role="student"
+// This file kept for backward compatibility
+
 const StudentSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true },
@@ -16,3 +19,4 @@ const StudentSchema = new mongoose.Schema(
 );
 
 export default mongoose.model("Student", StudentSchema);
+

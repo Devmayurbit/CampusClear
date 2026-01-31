@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { LogOut, Home, LayoutDashboard, User, LogIn } from "lucide-react";
 
 export default function Navbar() {
-  const { isAuthenticated, logout, student } = useAuth();
+  const { isAuthenticated, logout, user, userRole } = useAuth();
   const [location, setLocation] = useLocation();
 
   // Hide navbar only on auth pages
@@ -46,7 +46,7 @@ export default function Navbar() {
               <Home size={16} /> Home
             </button>
 
-            {isAuthenticated && (
+            {isAuthenticated && userRole === "student" && (
               <>
                 <button
                   onClick={() => setLocation("/dashboard")}
@@ -55,6 +55,40 @@ export default function Navbar() {
                   <LayoutDashboard size={16} /> Dashboard
                 </button>
 
+                <button
+                  onClick={() => setLocation("/profile")}
+                  className={navItem("/profile", location === "/profile")}
+                >
+                  <User size={16} /> Profile
+                </button>
+              </>
+            )}
+
+            {isAuthenticated && userRole === "admin" && (
+              <>
+                <button
+                  onClick={() => setLocation("/admin/dashboard")}
+                  className={navItem("/admin/dashboard", location === "/admin/dashboard")}
+                >
+                  <LayoutDashboard size={16} /> Dashboard
+                </button>
+                <button
+                  onClick={() => setLocation("/profile")}
+                  className={navItem("/profile", location === "/profile")}
+                >
+                  <User size={16} /> Profile
+                </button>
+              </>
+            )}
+
+            {isAuthenticated && userRole === "faculty" && (
+              <>
+                <button
+                  onClick={() => setLocation("/faculty/dashboard")}
+                  className={navItem("/faculty/dashboard", location === "/faculty/dashboard")}
+                >
+                  <LayoutDashboard size={16} /> Dashboard
+                </button>
                 <button
                   onClick={() => setLocation("/profile")}
                   className={navItem("/profile", location === "/profile")}
@@ -87,19 +121,24 @@ export default function Navbar() {
             ) : (
               <>
                 <div className="hidden sm:flex items-center gap-2">
-                  {student?.profilePhoto ? (
+                  {user?.profilePhoto ? (
                     <img
-                      src={student.profilePhoto}
+                      src={user.profilePhoto}
                       className="h-9 w-9 rounded-full object-cover border"
                     />
                   ) : (
                     <div className="h-9 w-9 rounded-full bg-primary-200 flex items-center justify-center font-semibold">
-                      {student?.fullName?.[0] || "U"}
+                      {user?.firstName?.[0] || "U"}
                     </div>
                   )}
-                  <span className="text-sm font-medium text-gray-700">
-                    {student?.fullName}
-                  </span>
+                  <div className="text-left">
+                    <span className="text-sm font-medium text-gray-700 block">
+                      {user?.firstName} {user?.lastName}
+                    </span>
+                    <span className="text-xs text-gray-500 block capitalize">
+                      {userRole}
+                    </span>
+                  </div>
                 </div>
 
                 <button

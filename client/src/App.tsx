@@ -13,6 +13,12 @@ import NotFound from "@/pages/not-found";
 import Home from "./pages/Home";
 import Footer from "@/components/Footer";
 import NoDues from "@/pages/nodues";
+import AdminDashboard from "@/pages/AdminDashboard";
+import FacultyDashboard from "@/pages/FacultyDashboard";
+import AdminApplications from "@/pages/AdminApplications";
+import AdminStudents from "@/pages/AdminStudents";
+import AdminDepartments from "@/pages/AdminDepartments";
+import AdminAuditLogs from "@/pages/AdminAuditLogs";
 
 
 function Router() {
@@ -24,6 +30,12 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/profile" component={Profile} />
       <Route path="/nodues" component={NoDues} />
+      <Route path="/admin/dashboard" component={AdminDashboard} />
+      <Route path="/admin/applications" component={AdminApplications} />
+      <Route path="/admin/students" component={AdminStudents} />
+      <Route path="/admin/departments" component={AdminDepartments} />
+      <Route path="/admin/audit-logs" component={AdminAuditLogs} />
+      <Route path="/faculty/dashboard" component={FacultyDashboard} />
       <Route component={NotFound} />
     </Switch>
   );

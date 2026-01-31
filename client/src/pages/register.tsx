@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -8,128 +8,244 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { Eye, EyeOff, GraduationCap, Shield, Users } from "lucide-react";
 import type { RegisterData } from "@shared/schema";
+import gsap from "gsap";
 
 export default function Register() {
   const { register: registerUser, isLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<"student" | "faculty" | "admin">("student");
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<RegisterData>({
     resolver: zodResolver(registerSchema),
+    defaultValues: {
+      role: "student",
+    },
   });
+
+  useEffect(() => {
+    // GSAP animation
+    if (cardRef.current) {
+      gsap.from(cardRef.current, {
+        scale: 0.95,
+        opacity: 0,
+        y: 30,
+        duration: 0.7,
+        ease: "power3.out",
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    setValue("role", selectedRole);
+  }, [selectedRole, setValue]);
 
   const onSubmit = async (data: RegisterData) => {
     await registerUser(data);
   };
 
+  const roles = [
+    { id: "student" as const, label: "Student", icon: GraduationCap, color: "from-blue-500 to-cyan-500" },
+    { id: "faculty" as const, label: "Faculty", icon: Users, color: "from-purple-500 to-pink-500" },
+    { id: "admin" as const, label: "Admin", icon: Shield, color: "from-orange-500 to-red-500" },
+  ];
+
   return (
-    <div className="min-h-screen flex">
-      <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto w-full max-w-md">
-          <div className="flex items-center mb-8">
-            <div className="h-12 w-12 bg-gradient-to-r from-primary-500 to-primary-600 rounded-full flex items-center justify-center text-white font-bold">
-              CDGI
-            </div>
-            <div className="ml-3">
-              <h1 className="text-2xl font-bold text-gray-900">No Dues</h1>
-              <p className="text-sm text-gray-600">Student Portal</p>
-            </div>
-          </div>
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex">
+      {/* Animated background */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute w-96 h-96 -top-48 -right-48 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
+        <div className="absolute w-96 h-96 top-1/2 -left-48 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+        <div className="absolute w-96 h-96 -bottom-48 right-1/3 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+      </div>
 
-          <Card className="p-8 animate-fade-in">
-            <div className="mb-6">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">Create an account</h2>
-              <p className="text-gray-600">Let's get started!</p>
+      {/* Left Side - Form */}
+      <div className="relative flex-1 flex items-center justify-center px-4 py-12">
+        <Card 
+          ref={cardRef}
+          className="w-full max-w-2xl backdrop-blur-2xl bg-white/10 border-white/20 shadow-2xl max-h-[90vh] overflow-y-auto"
+        >
+          <div className="p-8">
+            {/* Logo and Header */}
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <GraduationCap className="w-10 h-10 text-white" />
+              </div>
+              <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
+              <p className="text-white/70">Join CDGI Portal</p>
             </div>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              <div>
-                <Label htmlFor="enrollmentNo" className="text-sm font-medium text-gray-700">
-                  Enrollment No.
-                </Label>
-                <Input
-                  id="enrollmentNo"
-                  type="text"
-                  placeholder="Enter Enrollment No..."
-                  className="mt-2"
-                  {...register("enrollmentNo")}
-                />
-                {errors.enrollmentNo && (
-                  <p className="mt-1 text-sm text-red-600">{errors.enrollmentNo.message}</p>
-                )}
+            {/* Role Selection */}
+            <div className="grid grid-cols-3 gap-3 mb-6 p-1 bg-white/5 rounded-xl">
+              {roles.map((role) => (
+                <button
+                  key={role.id}
+                  type="button"
+                  onClick={() => setSelectedRole(role.id)}
+                  className={`relative py-4 px-3 rounded-lg text-sm font-medium transition-all duration-300 ${
+                    selectedRole === role.id ? "text-white shadow-lg scale-105" : "text-white/60 hover:text-white/80"
+                  }`}
+                >
+                  {selectedRole === role.id && (
+                    <div className={`absolute inset-0 bg-gradient-to-r ${role.color} rounded-lg -z-10`} />
+                  )}
+                  <role.icon className="w-6 h-6 mx-auto mb-2" />
+                  <div className="text-sm">{role.label}</div>
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="firstName" className="text-sm font-medium text-white">
+                    First Name
+                  </Label>
+                  <Input
+                    id="firstName"
+                    type="text"
+                    placeholder="First name..."
+                    className="mt-2 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                    {...register("firstName")}
+                  />
+                  {errors.firstName && (
+                    <p className="mt-1 text-sm text-red-400">{errors.firstName.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="lastName" className="text-sm font-medium text-white">
+                    Last Name
+                  </Label>
+                  <Input
+                    id="lastName"
+                    type="text"
+                    placeholder="Last name..."
+                    className="mt-2 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                    {...register("lastName")}
+                  />
+                  {errors.lastName && (
+                    <p className="mt-1 text-sm text-red-400">{errors.lastName.message}</p>
+                  )}
+                </div>
               </div>
 
               <div>
-                <Label htmlFor="fullName" className="text-sm font-medium text-gray-700">
-                  Full Name
-                </Label>
-                <Input
-                  id="fullName"
-                  type="text"
-                  placeholder="Enter your full name..."
-                  className="mt-2"
-                  {...register("fullName")}
-                />
-                {errors.fullName && (
-                  <p className="mt-1 text-sm text-red-600">{errors.fullName.message}</p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="email" className="text-sm font-medium text-white">
                   Email
                 </Label>
                 <Input
                   id="email"
                   type="email"
                   placeholder="hello@student.cdgi.edu.in"
-                  className="mt-2"
+                  className="mt-2 bg-white/10 border-white/20 text-white placeholder:text-white/50"
                   {...register("email")}
                 />
                 {errors.email && (
-                  <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                  <p className="mt-1 text-sm text-red-400">{errors.email.message}</p>
                 )}
               </div>
 
-              <div>
-                <Label htmlFor="program" className="text-sm font-medium text-gray-700">
-                  Program
-                </Label>
-                <Input
-                  id="program"
-                  type="text"
-                  placeholder="e.g., B.Tech Computer Science"
-                  className="mt-2"
-                  {...register("program")}
-                />
-                {errors.program && (
-                  <p className="mt-1 text-sm text-red-600">{errors.program.message}</p>
-                )}
-              </div>
+              {/* Student-specific fields */}
+              {selectedRole === "student" && (
+                <>
+                  <div>
+                    <Label htmlFor="enrollmentNo" className="text-sm font-medium text-white">
+                      Enrollment Number
+                    </Label>
+                    <Input
+                      id="enrollmentNo"
+                      type="text"
+                      placeholder="Enter your enrollment number..."
+                      className="mt-2 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                      {...register("enrollmentNo")}
+                    />
+                    {errors.enrollmentNo && (
+                      <p className="mt-1 text-sm text-red-400">{errors.enrollmentNo.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="program" className="text-sm font-medium text-white">
+                      Program
+                    </Label>
+                    <Input
+                      id="program"
+                      type="text"
+                      placeholder="e.g., B.Tech Computer Science"
+                      className="mt-2 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                      {...register("program")}
+                    />
+                    {errors.program && (
+                      <p className="mt-1 text-sm text-red-400">{errors.program.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="batch" className="text-sm font-medium text-white">
+                      Batch
+                    </Label>
+                    <Input
+                      id="batch"
+                      type="text"
+                      placeholder="e.g., 2020-2024"
+                      className="mt-2 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                      {...register("batch")}
+                    />
+                    {errors.batch && (
+                      <p className="mt-1 text-sm text-red-400">{errors.batch.message}</p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Faculty-specific fields */}
+              {selectedRole === "faculty" && (
+                <>
+                  <div>
+                    <Label htmlFor="departmentId" className="text-sm font-medium text-white">
+                      Department ID
+                    </Label>
+                    <Input
+                      id="departmentId"
+                      type="text"
+                      placeholder="Enter department ID..."
+                      className="mt-2 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                      {...register("departmentId")}
+                    />
+                    {errors.departmentId && (
+                      <p className="mt-1 text-sm text-red-400">{errors.departmentId.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="designation" className="text-sm font-medium text-white">
+                      Designation
+                    </Label>
+                    <Input
+                      id="designation"
+                      type="text"
+                      placeholder="e.g., Assistant Professor"
+                      className="mt-2 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                      {...register("designation")}
+                    />
+                    {errors.designation && (
+                      <p className="mt-1 text-sm text-red-400">{errors.designation.message}</p>
+                    )}
+                  </div>
+                </>
+              )}
 
               <div>
-                <Label htmlFor="batch" className="text-sm font-medium text-gray-700">
-                  Batch
-                </Label>
-                <Input
-                  id="batch"
-                  type="text"
-                  placeholder="e.g., 2020-2024"
-                  className="mt-2"
-                  {...register("batch")}
-                />
-                {errors.batch && (
-                  <p className="mt-1 text-sm text-red-600">{errors.batch.message}</p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="password" className="text-sm font-medium text-white">
                   Password
                 </Label>
                 <div className="relative mt-2">
@@ -137,24 +253,24 @@ export default function Register() {
                     id="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••••"
-                    className="pr-12"
+                    className="pr-12 bg-white/10 border-white/20 text-white placeholder:text-white/50"
                     {...register("password")}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white"
                   >
-                    <i className={`fas ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
                 {errors.password && (
-                  <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+                  <p className="mt-1 text-sm text-red-400">{errors.password.message}</p>
                 )}
               </div>
 
               <div>
-                <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="confirmPassword" className="text-sm font-medium text-white">
                   Confirm Password
                 </Label>
                 <div className="relative mt-2">
@@ -162,45 +278,49 @@ export default function Register() {
                     id="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
                     placeholder="••••••••••"
-                    className="pr-12"
+                    className="pr-12 bg-white/10 border-white/20 text-white placeholder:text-white/50"
                     {...register("confirmPassword")}
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white"
                   >
-                    <i className={`fas ${showConfirmPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
                 {errors.confirmPassword && (
-                  <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
+                  <p className="mt-1 text-sm text-red-400">{errors.confirmPassword.message}</p>
                 )}
               </div>
 
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white py-3 rounded-xl font-medium"
+                className={`w-full text-white py-3 rounded-xl font-medium transition-all duration-300 bg-gradient-to-r ${
+                  selectedRole === "student" ? "from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600" :
+                  selectedRole === "faculty" ? "from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600" :
+                  "from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
+                }`}
               >
                 {isLoading ? (
                   <i className="fas fa-spinner fa-spin mr-2"></i>
                 ) : null}
-                Sign up
+                Sign up as {selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)}
               </Button>
             </form>
 
-            <p className="mt-6 text-center text-sm text-gray-600">
+            <p className="mt-6 text-center text-sm text-white/70">
               Already have an account?{" "}
-              <Link href="/login" className="text-primary-600 hover:text-primary-700 font-medium">
+              <Link href="/login" className="text-white hover:text-white/90 font-medium underline">
                 Log in
               </Link>
             </p>
-          </Card>
-        </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Right Side Illustration - Same as login */}
+      {/* Right Side Illustration */}
       <div className="hidden lg:flex flex-1 bg-gradient-to-br from-primary-400 via-primary-500 to-primary-600 relative overflow-hidden">
         <div className="absolute top-8 right-8">
           <Button className="bg-white/20 text-white px-4 py-2 rounded-full text-sm font-medium backdrop-blur-sm hover:bg-white/30">

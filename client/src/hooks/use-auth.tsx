@@ -1,121 +1,116 @@
-import { createContext, useContext, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createContext, useContext, useState, useEffect } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { authApi, getAuthToken, setAuthToken, removeAuthToken } from "@/lib/auth";
+import { authApi, getAuthToken, setAuthToken, removeAuthToken, getUserData, setUserData } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-import type { Student, LoginData, RegisterData } from "@shared/schema";
+
+export interface User {
+  id: string;
+  fullName: string;
+  email: string;
+  role: "student" | "faculty" | "admin";
+  enrollmentNo?: string;
+  department?: string;
+}
+
+export interface LoginData {
+  email: string;
+  password: string;
+}
+
+export interface RegisterData {
+  fullName: string;
+  enrollmentNo: string;
+  email: string;
+  password: string;
+  program: string;
+  batch: string;
+}
 
 interface AuthContextType {
-  student: Student | null;
+  user: User | null;
   isLoading: boolean;
+  isAuthenticated: boolean;
+  userRole: "student" | "faculty" | "admin" | null;
   login: (data: LoginData) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
-  isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// ✅ Restore student from localStorage (page refresh safe)
-const getStoredStudent = (): Student | null => {
-  try {
-    const raw = localStorage.getItem("student");
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const token = getAuthToken();
+  const [userState, setUserState] = useState<User | null>(getUserData());
 
-  const [studentState, setStudentState] = useState<Student | null>(
-    getStoredStudent()
-  );
+  // Sync auth state on mount
+  useEffect(() => {
+    if (token && !userState) {
+      const storedUser = getUserData();
+      if (storedUser) {
+        setUserState(storedUser);
+      }
+    }
+  }, [token, userState]);
 
-  // ---------------------------
-  // Load profile if token exists
-  // ---------------------------
-  const { isLoading } = useQuery({
-    queryKey: ["/api/profile"],
-    enabled: !!token,
-    retry: false,
-    onSuccess: (profile) => {
-      setStudentState(profile);
-      localStorage.setItem("student", JSON.stringify(profile));
-    },
-    onError: () => {
-      removeAuthToken();
-      localStorage.removeItem("student");
-      setStudentState(null);
-      queryClient.clear();
-    },
-  });
-
-  // ---------------------------
-  // Login mutation
-  // ---------------------------
   const loginMutation = useMutation({
     mutationFn: authApi.login,
-    onSuccess: (data) => {
-      setAuthToken(data.token);
-
-      setStudentState(data.student);
-      localStorage.setItem("student", JSON.stringify(data.student));
-
-      queryClient.setQueryData(["/api/profile"], data.student);
+    onSuccess: (response: any) => {
+      const { token, user } = response.data;
+      
+      setAuthToken(token);
+      setUserState(user);
+      setUserData(user);
 
       toast({
         title: "Welcome back!",
-        description: "Successfully logged in.",
+        description: `Logged in as ${user.role}`,
       });
 
-      setLocation("/dashboard");
+      // Route based on role
+      setTimeout(() => {
+        if (user.role === "admin") {
+          setLocation("/admin/dashboard");
+        } else if (user.role === "faculty") {
+          setLocation("/faculty/dashboard");
+        } else {
+          setLocation("/dashboard");
+        }
+      }, 500);
     },
     onError: (error: Error) => {
       toast({
         title: "Login failed",
-        description: error.message,
+        description: error.message || "Invalid credentials",
         variant: "destructive",
       });
     },
   });
 
-  // ---------------------------
-  // Register mutation
-  // ---------------------------
   const registerMutation = useMutation({
     mutationFn: authApi.register,
-    onSuccess: (data) => {
-      setAuthToken(data.token);
-
-      setStudentState(data.student);
-      localStorage.setItem("student", JSON.stringify(data.student));
-
-      queryClient.setQueryData(["/api/profile"], data.student);
-
+    onSuccess: () => {
       toast({
-        title: "Account created!",
-        description: "Welcome to CDGI No-Dues System.",
+        title: "Registration successful!",
+        description: "Please check your email to verify your account.",
       });
 
-      setLocation("/dashboard");
+      setTimeout(() => {
+        setLocation("/login");
+      }, 1000);
     },
     onError: (error: Error) => {
       toast({
         title: "Registration failed",
-        description: error.message,
+        description: error.message || "Unable to register",
         variant: "destructive",
       });
     },
   });
 
-  // ---------------------------
-  // Actions
-  // ---------------------------
   const login = async (data: LoginData) => {
     await loginMutation.mutateAsync(data);
   };
@@ -126,8 +121,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     removeAuthToken();
-    localStorage.removeItem("student");
-    setStudentState(null);
+    localStorage.removeItem("user");
+    setUserState(null);
     queryClient.clear();
 
     toast({
@@ -138,22 +133,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLocation("/");
   };
 
-  // ---------------------------
-  // Context value
-  // ---------------------------
-  const contextValue = {
-    student: studentState,
-    isLoading:
-      isLoading ||
-      loginMutation.isPending ||
-      registerMutation.isPending,
-
+  const contextValue: AuthContextType = {
+    user: userState,
+    isLoading: loginMutation.isPending || registerMutation.isPending,
+    isAuthenticated: !!token && !!userState,
+    userRole: userState?.role || null,
     login,
     register,
     logout,
-
-    // ✅ Auth based only on token existence
-    isAuthenticated: !!token,
   };
 
   return (
@@ -163,13 +150,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ---------------------------
-// Hook
-// ---------------------------
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
+}
+
+// Helper hooks for role-based logic
+export function useIsAdmin() {
+  const { userRole } = useAuth();
+  return userRole === "admin";
+}
+
+export function useIsFaculty() {
+  const { userRole } = useAuth();
+  return userRole === "faculty";
+}
+
+export function useIsStudent() {
+  const { userRole } = useAuth();
+  return userRole === "student";
 }

@@ -11,10 +11,10 @@ import { Card } from "@/components/ui/card";
 import { FileUpload } from "@/components/ui/file-upload";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import type { Student } from "@shared/schema";
+import type { User } from "@shared/schema";
 
 export default function Profile() {
-  const { student, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -40,44 +40,46 @@ export default function Profile() {
     handleSubmit,
     formState: { errors, isDirty },
     reset,
-  } = useForm<Partial<Student>>({
+  } = useForm<Partial<User>>({
     defaultValues: {
-      fullName: student?.fullName || "",
-      email: student?.email || "",
-      phone: student?.phone || "",
-      address: student?.address || "",
-      cgpa: student?.cgpa || "",
-      credits: student?.credits || "",
-      semester: student?.semester || "",
-      expectedGraduation: student?.expectedGraduation || "",
-      emergencyContactName: student?.emergencyContactName || "",
-      emergencyContactRelation: student?.emergencyContactRelation || "",
-      emergencyContactPhone: student?.emergencyContactPhone || "",
-      emergencyContactEmail: student?.emergencyContactEmail || "",
+      firstName: user?.firstName || "",
+      lastName: user?.lastName || "",
+      email: user?.email || "",
+      phone: user?.phone || "",
+      address: user?.address || "",
+      cgpa: user?.cgpa || "",
+      credits: user?.credits || "",
+      semester: user?.semester || "",
+      expectedGraduation: user?.expectedGraduation || "",
+      emergencyContactName: user?.emergencyContactName || "",
+      emergencyContactRelation: user?.emergencyContactRelation || "",
+      emergencyContactPhone: user?.emergencyContactPhone || "",
+      emergencyContactEmail: user?.emergencyContactEmail || "",
     },
   });
 
   // Keep form synced when student changes
   useEffect(() => {
-    if (student) {
+    if (user) {
       reset({
-        fullName: student.fullName,
-        email: student.email,
-        phone: student.phone,
-        address: student.address,
-        cgpa: student.cgpa,
-        credits: student.credits,
-        semester: student.semester,
-        expectedGraduation: student.expectedGraduation,
-        emergencyContactName: student.emergencyContactName,
-        emergencyContactRelation: student.emergencyContactRelation,
-        emergencyContactPhone: student.emergencyContactPhone,
-        emergencyContactEmail: student.emergencyContactEmail,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        address: user.address,
+        cgpa: user.cgpa,
+        credits: user.credits,
+        semester: user.semester,
+        expectedGraduation: user.expectedGraduation,
+        emergencyContactName: user.emergencyContactName,
+        emergencyContactRelation: user.emergencyContactRelation,
+        emergencyContactPhone: user.emergencyContactPhone,
+        emergencyContactEmail: user.emergencyContactEmail,
       });
 
-      setPreviewImage(student.profilePhoto || null);
+      setPreviewImage(user.profilePhoto || null);
     }
-  }, [student, reset]);
+  }, [user, reset]);
 
   // ===========================
   // MUTATIONS (UNCHANGED)
@@ -85,7 +87,7 @@ export default function Profile() {
   const updateProfileMutation = useMutation({
     mutationFn: authApi.updateProfile,
     onSuccess: (data) => {
-      queryClient.setQueryData(["/api/profile"], data.student);
+      queryClient.setQueryData(["/api/v1/profile"], data.student || data.user || data);
       toast({
         title: "Profile updated",
         description: "Your profile has been successfully updated.",
@@ -103,8 +105,8 @@ export default function Profile() {
   const uploadPhotoMutation = useMutation({
     mutationFn: authApi.uploadPhoto,
     onSuccess: (data) => {
-      const updatedStudent = { ...student, profilePhoto: data.photoPath };
-      queryClient.setQueryData(["/api/profile"], updatedStudent);
+      const updatedUser = { ...user, profilePhoto: data.photoPath };
+      queryClient.setQueryData(["/api/v1/profile"], updatedUser);
       toast({
         title: "Photo uploaded",
         description: "Your profile photo has been updated.",
@@ -123,7 +125,7 @@ export default function Profile() {
   // ===========================
   // HANDLERS
   // ===========================
-  const onSubmit = async (data: Partial<Student>) => {
+  const onSubmit = async (data: Partial<User>) => {
     await updateProfileMutation.mutateAsync(data);
   };
 
@@ -150,6 +152,13 @@ export default function Profile() {
   // ===========================
   // UI
   // ===========================
+  const roleTitle = user?.role === "admin" ? "Admin Profile" : user?.role === "faculty" ? "Faculty Profile" : "Student Profile";
+  const roleSubtitle = user?.role === "admin"
+    ? "Manage your admin account and preferences"
+    : user?.role === "faculty"
+    ? "Manage your faculty account details"
+    : "Manage your personal information and profile photo";
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 px-4 py-10">
       <div className="max-w-6xl mx-auto space-y-10">
@@ -158,11 +167,9 @@ export default function Profile() {
         <Card className="overflow-hidden shadow-xl border-0">
           <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 px-8 py-8">
             <h1 className="text-3xl font-bold text-white tracking-wide">
-              🎓 Student Profile
+              🎓 {roleTitle}
             </h1>
-            <p className="text-white/80 mt-1">
-              Manage your personal information and profile photo
-            </p>
+            <p className="text-white/80 mt-1">{roleSubtitle}</p>
           </div>
 
           <div className="p-8 grid grid-cols-1 lg:grid-cols-3 gap-10">
@@ -203,12 +210,14 @@ export default function Profile() {
               </div>
 
               <h3 className="text-xl font-semibold text-gray-800">
-                {student?.fullName}
+                {user?.firstName} {user?.lastName}
               </h3>
-              <p className="text-gray-500">{student?.program}</p>
-              <p className="text-sm text-gray-400">
-                Enrollment: {student?.enrollmentNo}
-              </p>
+              <p className="text-gray-500 capitalize">{user?.role}</p>
+              {user?.role === "student" && (
+                <p className="text-sm text-gray-400">
+                  Enrollment: {user?.enrollmentNo}
+                </p>
+              )}
 
               {/* Upload Button */}
               {selectedFile && (
@@ -239,22 +248,23 @@ export default function Profile() {
                 {/* BASIC INFO */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <Label>Full Name</Label>
-                    <Input className="mt-1" {...register("fullName")} />
-                    {errors.fullName && (
+                    <Label>First Name</Label>
+                    <Input className="mt-1" {...register("firstName")} />
+                    {errors.firstName && (
                       <p className="text-red-500 text-sm mt-1">
-                        {errors.fullName.message}
+                        {errors.firstName.message}
                       </p>
                     )}
                   </div>
 
                   <div>
-                    <Label>Enrollment Number</Label>
-                    <Input
-                      value={student?.enrollmentNo}
-                      readOnly
-                      className="mt-1 bg-gray-100"
-                    />
+                    <Label>Last Name</Label>
+                    <Input className="mt-1" {...register("lastName")} />
+                    {errors.lastName && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {errors.lastName.message}
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -267,23 +277,34 @@ export default function Profile() {
                     <Input className="mt-1" {...register("phone")} />
                   </div>
 
-                  <div>
-                    <Label>Program</Label>
-                    <Input
-                      value={student?.program}
-                      readOnly
-                      className="mt-1 bg-gray-100"
-                    />
-                  </div>
-
-                  <div>
-                    <Label>Batch</Label>
-                    <Input
-                      value={student?.batch}
-                      readOnly
-                      className="mt-1 bg-gray-100"
-                    />
-                  </div>
+                  {user?.role === "student" && (
+                    <>
+                      <div>
+                        <Label>Enrollment Number</Label>
+                        <Input
+                          value={user?.enrollmentNo}
+                          readOnly
+                          className="mt-1 bg-gray-100"
+                        />
+                      </div>
+                      <div>
+                        <Label>Program</Label>
+                        <Input
+                          value={user?.program}
+                          readOnly
+                          className="mt-1 bg-gray-100"
+                        />
+                      </div>
+                      <div>
+                        <Label>Batch</Label>
+                        <Input
+                          value={user?.batch}
+                          readOnly
+                          className="mt-1 bg-gray-100"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* ADDRESS */}
@@ -321,7 +342,8 @@ export default function Profile() {
         </Card>
 
         {/* ================= EXTRA INFO CARDS ================= */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {user?.role === "student" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
           {/* Academic Info */}
           <Card className="p-6 shadow-md hover:shadow-lg transition">
@@ -329,20 +351,20 @@ export default function Profile() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span>CGPA</span>
-                <span className="font-medium">{student?.cgpa || "N/A"}</span>
+                <span className="font-medium">{user?.cgpa || "N/A"}</span>
               </div>
               <div className="flex justify-between">
                 <span>Credits</span>
-                <span className="font-medium">{student?.credits || "N/A"}</span>
+                <span className="font-medium">{user?.credits || "N/A"}</span>
               </div>
               <div className="flex justify-between">
                 <span>Semester</span>
-                <span className="font-medium">{student?.semester || "N/A"}</span>
+                <span className="font-medium">{user?.semester || "N/A"}</span>
               </div>
               <div className="flex justify-between">
                 <span>Graduation</span>
                 <span className="font-medium">
-                  {student?.expectedGraduation || "N/A"}
+                  {user?.expectedGraduation || "N/A"}
                 </span>
               </div>
             </div>
@@ -355,31 +377,32 @@ export default function Profile() {
               <div className="flex justify-between">
                 <span>Name</span>
                 <span className="font-medium">
-                  {student?.emergencyContactName || "N/A"}
+                  {user?.emergencyContactName || "N/A"}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>Relation</span>
                 <span className="font-medium">
-                  {student?.emergencyContactRelation || "N/A"}
+                  {user?.emergencyContactRelation || "N/A"}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>Phone</span>
                 <span className="font-medium">
-                  {student?.emergencyContactPhone || "N/A"}
+                  {user?.emergencyContactPhone || "N/A"}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>Email</span>
                 <span className="font-medium">
-                  {student?.emergencyContactEmail || "N/A"}
+                  {user?.emergencyContactEmail || "N/A"}
                 </span>
               </div>
             </div>
           </Card>
 
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

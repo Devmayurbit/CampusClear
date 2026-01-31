@@ -11,6 +11,12 @@ import {
   sendNoDuesSubmittedEmail,
 } from "./mailer";
 
+// Import v1 routes
+import { register as registerAuth, login, logout, verifyEmail, refreshToken, requestPasswordReset, resetPassword, changePassword, getProfile, updateProfile } from "./routes/auth";
+import { optionalAuthenticateToken } from "./middleware/auth";
+import { submitNoDues, verifyNoDues, getStudentNoDues, getNoDuesById, getFacultyNoDues, approveDepartmentClearance, rejectDepartmentClearance } from "./routes/nodues";
+import { getAllNoDues, approveNoDuesAdmin, rejectNoDuesAdmin, generateCertificate, verifyCertificate, getDashboardStats, getAllStudents, getAuditLogs, createDepartment, getAllDepartments } from "./routes/admin";
+
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
 const upload = multer({
@@ -34,6 +40,46 @@ function authenticateToken(req: any, res: any, next: any) {
 
 // ---------------- ROUTES ----------------
 export async function registerRoutes(app: Express): Promise<Server> {
+  
+  // ================= V1 ROUTES (NEW) =================
+  // AUTH ROUTES
+  app.post("/api/v1/auth/register", optionalAuthenticateToken, registerAuth);
+  app.post("/api/v1/auth/login", login);
+  app.post("/api/v1/auth/logout", logout);
+  app.get("/api/v1/auth/verify/:token", verifyEmail);
+  app.post("/api/v1/auth/refresh-token", refreshToken);
+  app.post("/api/v1/auth/forgot-password", requestPasswordReset);
+  app.post("/api/v1/auth/reset-password/:token", resetPassword);
+  app.post("/api/v1/auth/change-password", changePassword);
+
+  // PROFILE ROUTES
+  app.get("/api/v1/profile", getProfile);
+  app.put("/api/v1/profile", updateProfile);
+
+  // NO-DUES ROUTES
+  app.post("/api/v1/nodues", submitNoDues);
+  app.get("/api/v1/nodues/verify/:token", verifyNoDues);
+  app.get("/api/v1/nodues/student", getStudentNoDues);
+  app.get("/api/v1/nodues/:id", getNoDuesById);
+
+  // FACULTY ROUTES
+  app.get("/api/v1/faculty/nodues", getFacultyNoDues);
+  app.put("/api/v1/faculty/nodues/:noDuesId/approve", approveDepartmentClearance);
+  app.put("/api/v1/faculty/nodues/:noDuesId/reject", rejectDepartmentClearance);
+
+  // ADMIN ROUTES
+  app.get("/api/v1/admin/nodues", getAllNoDues);
+  app.put("/api/v1/admin/nodues/:noDuesId/approve", approveNoDuesAdmin);
+  app.put("/api/v1/admin/nodues/:noDuesId/reject", rejectNoDuesAdmin);
+  app.post("/api/v1/admin/certificate/generate/:noDuesId", generateCertificate);
+  app.get("/api/v1/certificate/verify/:certificateId", verifyCertificate);
+  app.get("/api/v1/admin/dashboard/stats", getDashboardStats);
+  app.get("/api/v1/admin/students", getAllStudents);
+  app.get("/api/v1/admin/audit-logs", getAuditLogs);
+  app.post("/api/v1/admin/departments", createDepartment);
+  app.get("/api/v1/admin/departments", getAllDepartments);
+
+  // ================= OLD ROUTES (LEGACY - WILL BE REMOVED) =================
 
   // ================= REGISTER =================
   app.post("/api/auth/register", async (req, res) => {
