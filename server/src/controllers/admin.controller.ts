@@ -1,16 +1,16 @@
 import { Request, Response } from "express";
-import crypto from "crypto";
 import { NoDuesRequest } from "../models/NoDuesRequest";
 import { Certificate } from "../models/Certificate";
 import { Student } from "../models/Student";
 import { sendEmail } from "../utils/email";
 import { ApiError } from "../middleware/errorHandler";
 import { logAudit } from "../services/audit.service";
+import { Role } from "../utils/roles";
 
 export async function getAllRequests(req: Request, res: Response) {
   const { status, page = 1, limit = 20 } = req.query;
 
-  const filter: any = { verified: true };
+  const filter: any = {};
   if (status) {
     filter.overallStatus = status;
   }
@@ -44,23 +44,33 @@ export async function approveRequest(req: Request, res: Response) {
     throw new ApiError(404, "NOT_FOUND", "Request not found");
   }
 
-  // Check if all departments are CLEARED
-  const allCleared = Object.values(request.departments as any).every(
-    (dept: any) => dept.status === "CLEARED"
-  );
-
-  if (!allCleared) {
-    throw new ApiError(
-      400,
-      "NOT_READY",
-      "All departments must clear the student first"
-    );
-  }
-
+  request.libraryClearance = {
+    status: "APPROVED",
+    remarks: request.libraryClearance?.remarks || "",
+    updatedBy: adminId,
+    updatedAt: new Date(),
+  } as any;
+  request.accountClearance = {
+    status: "APPROVED",
+    remarks: request.accountClearance?.remarks || "",
+    updatedBy: adminId,
+    updatedAt: new Date(),
+  } as any;
+  request.hostelClearance = {
+    status: "APPROVED",
+    remarks: request.hostelClearance?.remarks || "",
+    updatedBy: adminId,
+    updatedAt: new Date(),
+  } as any;
+  request.departmentClearance = {
+    status: "APPROVED",
+    remarks: request.departmentClearance?.remarks || "",
+    updatedBy: adminId,
+    updatedAt: new Date(),
+  } as any;
   request.overallStatus = "APPROVED";
   await request.save();
 
-  // Send approval email
   const student = await Student.findById(request.studentId);
   if (student) {
     try {
@@ -70,9 +80,9 @@ export async function approveRequest(req: Request, res: Response) {
         html: `
           <h1>Congratulations!</h1>
           <p>Hi ${student.fullName},</p>
-          <p>Your No-Dues request has been approved! All departments have cleared you.</p>
+          <p>Your No-Dues request has been approved.</p>
           <p>You can now download your No-Dues certificate from the portal.</p>
-          <p><strong>Enrollment No:</strong> ${student.enrollmentNo}</p>
+          <p><strong>Enrollment No:</strong> ${student.enrollmentNo || "N/A"}</p>
         `,
       });
     } catch (error) {
@@ -82,7 +92,7 @@ export async function approveRequest(req: Request, res: Response) {
 
   await logAudit({
     actorId: adminId,
-    actorRole: "admin",
+    actorRole: Role.ADMIN,
     action: "APPROVE_NODUES",
     targetType: "NoDuesRequest",
     targetId: requestId,
@@ -108,7 +118,6 @@ export async function rejectRequest(req: Request, res: Response) {
   request.overallStatus = "REJECTED";
   await request.save();
 
-  // Send rejection email
   const student = await Student.findById(request.studentId);
   if (student) {
     try {
@@ -130,7 +139,7 @@ export async function rejectRequest(req: Request, res: Response) {
 
   await logAudit({
     actorId: adminId,
-    actorRole: "admin",
+    actorRole: Role.ADMIN,
     action: "REJECT_NODUES",
     targetType: "NoDuesRequest",
     targetId: requestId,
@@ -144,17 +153,16 @@ export async function rejectRequest(req: Request, res: Response) {
 }
 
 export async function getAdminDashboard(req: Request, res: Response) {
-  const allRequests = await NoDuesRequest.find({ verified: true }).lean();
+  const allRequests = await NoDuesRequest.find({}).lean();
 
   const stats = {
     total: allRequests.length,
     approved: allRequests.filter((r: any) => r.overallStatus === "APPROVED").length,
     pending: allRequests.filter((r: any) => r.overallStatus === "PENDING").length,
-    hold: allRequests.filter((r: any) => r.overallStatus === "HOLD").length,
     rejected: allRequests.filter((r: any) => r.overallStatus === "REJECTED").length,
   };
 
-  const recentRequests = await NoDuesRequest.find({ verified: true })
+  const recentRequests = await NoDuesRequest.find({})
     .sort({ createdAt: -1 })
     .limit(10)
     .populate("studentId", "fullName enrollmentNo email");
@@ -178,7 +186,6 @@ export async function getAuditLogs(req: Request, res: Response) {
   if (action) filter.action = action;
   if (actorRole) filter.actorRole = actorRole;
 
-  // Import AuditLog here to avoid circular dependency
   const { AuditLog } = await import("../models/AuditLog");
 
   const logs = await AuditLog.find(filter)
@@ -203,7 +210,7 @@ export async function getAuditLogs(req: Request, res: Response) {
 export async function getSystemStats(req: Request, res: Response) {
   const { AuditLog } = await import("../models/AuditLog");
 
-  const totalStudents = await Student.countDocuments({ role: "student" });
+  const totalStudents = await Student.countDocuments({ role: { $in: [Role.STUDENT, "student"] } });
   const totalFaculty = await (
     await import("../models/Faculty")
   ).Faculty.countDocuments();

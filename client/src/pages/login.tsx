@@ -1,21 +1,29 @@
 import { useState, useEffect, useRef } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { loginSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Eye, EyeOff, GraduationCap, Shield, Users } from "lucide-react";
-import type { LoginData } from "@shared/schema";
+import { Eye, EyeOff, GraduationCap } from "lucide-react";
 import gsap from "gsap";
+import type { LoginRequest } from "@/types";
+
+const loginSchema = z.object({
+  email: z.string().email("Please enter a valid email"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const { login, isLoading } = useAuth();
+  const { login, googleSignIn, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<"student" | "faculty" | "admin">("student");
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -24,7 +32,7 @@ export default function Login() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<LoginData>({
+  } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
 
@@ -50,33 +58,25 @@ export default function Login() {
     }, "-=0.2");
   }, []);
 
-  const onSubmit = async (data: LoginData) => {
+  const onSubmit = async (data: LoginFormData) => {
     await login(data);
   };
 
-  const roles = [
-    { 
-      id: "student" as const, 
-      label: "Student", 
-      icon: GraduationCap,
-      color: "from-blue-500 to-cyan-500",
-      description: "Access your clearance portal"
-    },
-    { 
-      id: "faculty" as const, 
-      label: "Faculty", 
-      icon: Users,
-      color: "from-purple-500 to-pink-500",
-      description: "Review student applications"
-    },
-    { 
-      id: "admin" as const, 
-      label: "Admin", 
-      icon: Shield,
-      color: "from-orange-500 to-red-500",
-      description: "Manage system operations"
-    },
-  ];
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsLoadingGoogle(true);
+      // In a real app, you'd use @react-oauth/google library
+      // For now, we'll show a placeholder
+      const idToken = prompt("Enter your Google ID Token (for testing):");
+      if (idToken) {
+        await googleSignIn({ idToken });
+      }
+    } catch (error) {
+      console.error("Google sign-in failed:", error);
+    } finally {
+      setIsLoadingGoogle(false);
+    }
+  };
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -99,38 +99,9 @@ export default function Login() {
                 <GraduationCap className="w-10 h-10 text-white" />
               </div>
               <h1 ref={titleRef} className="text-3xl font-bold text-white mb-2">
-                CDGI Portal
+                Campus Clear
               </h1>
-              <p className="text-white/70">Sign in to continue</p>
-            </div>
-
-            {/* Role Selection Tabs */}
-            <div className="grid grid-cols-3 gap-2 mb-6 p-1 bg-white/5 rounded-xl backdrop-blur-sm">
-              {roles.map((role) => (
-                <button
-                  key={role.id}
-                  type="button"
-                  onClick={() => setSelectedRole(role.id)}
-                  className={`relative py-3 px-2 rounded-lg text-sm font-medium transition-all duration-300 ${
-                    selectedRole === role.id
-                      ? "text-white shadow-lg"
-                      : "text-white/60 hover:text-white/80"
-                  }`}
-                >
-                  {selectedRole === role.id && (
-                    <div className={`absolute inset-0 bg-gradient-to-r ${role.color} rounded-lg -z-10`} />
-                  )}
-                  <role.icon className="w-5 h-5 mx-auto mb-1" />
-                  <div className="text-xs">{role.label}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* Role Description */}
-            <div className="mb-6 p-3 bg-white/5 rounded-lg backdrop-blur-sm border border-white/10">
-              <p className="text-white/80 text-sm text-center">
-                {roles.find(r => r.id === selectedRole)?.description}
-              </p>
+              <p className="text-white/70">No-Dues Portal</p>
             </div>
 
             <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -141,7 +112,7 @@ export default function Login() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="your.email@cdgi.edu.in"
+                  placeholder="your.email@example.com"
                   className="mt-2 h-12 bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:bg-white/15 focus:border-purple-400 backdrop-blur-sm"
                   {...register("email")}
                 />
@@ -178,9 +149,7 @@ export default function Login() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className={`w-full h-12 bg-gradient-to-r ${
-                  roles.find(r => r.id === selectedRole)?.color
-                } text-white font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed`}
+                className="w-full h-12 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <div className="flex items-center justify-center">
@@ -188,12 +157,42 @@ export default function Login() {
                     Signing In...
                   </div>
                 ) : (
-                  `Sign In as ${roles.find(r => r.id === selectedRole)?.label}`
+                  "Sign In"
                 )}
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            {/* Divider */}
+            <div className="my-6 flex items-center">
+              <div className="flex-1 h-px bg-white/20"></div>
+              <span className="px-3 text-white/60 text-sm">or</span>
+              <div className="flex-1 h-px bg-white/20"></div>
+            </div>
+
+            {/* Google Sign-in Button */}
+            <Button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isLoadingGoogle}
+              className="w-full h-12 bg-white/10 text-white font-semibold hover:bg-white/20 border border-white/30 transition-all duration-300 disabled:opacity-50"
+            >
+              {isLoadingGoogle ? (
+                <div className="flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  Signing in...
+                </div>
+              ) : (
+                <span>Sign in with Google</span>
+              )}
+            </Button>
+
+            {/* Links */}
+            <div className="mt-6 space-y-3 text-center">
+              <Link href="/forgot-password">
+                <p className="text-white/70 hover:text-white text-sm font-medium transition-colors">
+                  Forgot Password?
+                </p>
+              </Link>
               <p className="text-white/70 text-sm">
                 Don't have an account?{" "}
                 <Link href="/register" className="text-purple-400 hover:text-purple-300 font-semibold transition-colors">
@@ -206,8 +205,8 @@ export default function Login() {
             <div className="mt-6 pt-6 border-t border-white/10">
               <p className="text-xs text-white/50 text-center">
                 Need help? Contact{" "}
-                <a href="mailto:admissions@cdgi.edu.in" className="text-purple-400 hover:text-purple-300">
-                  admissions@cdgi.edu.in
+                <a href="mailto:support@example.com" className="text-purple-400 hover:text-purple-300">
+                  support@example.com
                 </a>
               </p>
             </div>

@@ -4,6 +4,23 @@ import { Student } from "../models/Student";
 import { Faculty } from "../models/Faculty";
 import { ApiError } from "../middleware/errorHandler";
 import { logAudit } from "../services/audit.service";
+import { Role } from "../utils/roles";
+
+function mapDepartmentToClearance(department?: string) {
+  switch (department) {
+    case "LIBRARY":
+      return "libraryClearance" as const;
+    case "ACCOUNTS":
+      return "accountClearance" as const;
+    case "HOSTEL":
+      return "hostelClearance" as const;
+    case "LAB":
+    case "TP":
+    case "SPORTS":
+    default:
+      return "departmentClearance" as const;
+  }
+}
 
 export async function getFacultyRequests(req: Request, res: Response) {
   const facultyId = (req as any).user.userId;
@@ -13,16 +30,14 @@ export async function getFacultyRequests(req: Request, res: Response) {
     throw new ApiError(404, "NOT_FOUND", "Faculty not found");
   }
 
-  const requests = await NoDuesRequest.find({
-    verified: true,
-  })
+  const requests = await NoDuesRequest.find({})
     .populate("studentId", "fullName enrollmentNo email program batch")
     .lean();
 
-  // Filter requests for the faculty's department
+  const clearanceKey = mapDepartmentToClearance(faculty.department);
   const filtered = requests.map((req: any) => ({
     ...req,
-    departmentStatus: req.departments[faculty.department],
+    departmentStatus: req[clearanceKey],
     department: faculty.department,
   }));
 
@@ -51,11 +66,13 @@ export async function getFacultyRequestById(req: Request, res: Response) {
     throw new ApiError(404, "NOT_FOUND", "Request not found");
   }
 
+  const clearanceKey = mapDepartmentToClearance(faculty.department);
+
   res.json({
     success: true,
     data: {
       ...request.toObject(),
-      myDepartmentStatus: (request.departments as any)[faculty.department],
+      myDepartmentStatus: (request as any)[clearanceKey],
       department: faculty.department,
     },
   });
@@ -80,28 +97,30 @@ export async function updateRequestStatus(req: Request, res: Response) {
     throw new ApiError(404, "NOT_FOUND", "Request not found");
   }
 
-  const validStatuses = ["CLEARED", "PENDING", "HOLD"];
+  const validStatuses = ["APPROVED", "PENDING", "REJECTED"];
   if (!validStatuses.includes(status)) {
     throw new ApiError(400, "VALIDATION_ERROR", "Invalid status");
   }
 
-  // Update the specific department
-  (request.departments as any)[faculty.department] = {
+  const clearanceKey = mapDepartmentToClearance(faculty.department);
+  (request as any)[clearanceKey] = {
     status,
     remarks: remarks || "",
     updatedBy: facultyId,
     updatedAt: new Date(),
   };
 
-  // Check overall status
-  const allStatuses = Object.values(request.departments as any);
-  const allCleared = (allStatuses as any[]).every((d) => d.status === "CLEARED");
-  const anyHold = (allStatuses as any[]).some((d) => d.status === "HOLD");
+  const statuses = [
+    request.libraryClearance?.status,
+    request.accountClearance?.status,
+    request.hostelClearance?.status,
+    request.departmentClearance?.status,
+  ];
 
-  if (allCleared) {
+  if (statuses.includes("REJECTED")) {
+    request.overallStatus = "REJECTED";
+  } else if (statuses.every((s) => s === "APPROVED")) {
     request.overallStatus = "APPROVED";
-  } else if (anyHold) {
-    request.overallStatus = "HOLD";
   } else {
     request.overallStatus = "PENDING";
   }
@@ -110,7 +129,7 @@ export async function updateRequestStatus(req: Request, res: Response) {
 
   await logAudit({
     actorId: facultyId,
-    actorRole: "faculty",
+    actorRole: Role.FACULTY,
     action: "FACULTY_UPDATE_NODUES",
     targetType: "NoDuesRequest",
     targetId: requestId,
@@ -153,11 +172,13 @@ export async function searchStudentRequest(req: Request, res: Response) {
     });
   }
 
+  const clearanceKey = mapDepartmentToClearance(faculty.department);
+
   res.json({
     success: true,
     data: {
       ...request.toObject(),
-      myDepartmentStatus: (request.departments as any)[faculty.department],
+      myDepartmentStatus: (request as any)[clearanceKey],
     },
   });
 }
@@ -170,7 +191,7 @@ export async function getFacultyDashboard(req: Request, res: Response) {
     throw new ApiError(404, "NOT_FOUND", "Faculty not found");
   }
 
-  const requests = await NoDuesRequest.find({ verified: true }).lean();
+  const requests = await NoDuesRequest.find({}).lean();
 
   const stats = {
     totalRequests: requests.length,
@@ -179,10 +200,11 @@ export async function getFacultyDashboard(req: Request, res: Response) {
     hold: 0,
   };
 
+  const clearanceKey = mapDepartmentToClearance(faculty.department);
   requests.forEach((req: any) => {
-    const deptStatus = req.departments[faculty.department]?.status;
-    if (deptStatus === "CLEARED") stats.cleared++;
-    else if (deptStatus === "HOLD") stats.hold++;
+    const deptStatus = req[clearanceKey]?.status;
+    if (deptStatus === "APPROVED") stats.cleared++;
+    else if (deptStatus === "REJECTED") stats.hold++;
     else stats.pending++;
   });
 

@@ -2,7 +2,7 @@ import { AuditLog } from "../models/AuditLog";
 
 export async function logAudit(params: {
   actorId: string;
-  actorRole: "student" | "faculty" | "admin";
+  actorRole: "STUDENT" | "FACULTY" | "ADMIN";
   action: string;
   targetType: string;
   targetId?: string;

@@ -7,6 +7,7 @@ import {
   downloadCertificate,
 } from "../controllers/certificate.controller";
 import { authenticateJWT, authorizeRole } from "../middleware/auth";
+import { Role } from "../utils/roles";
 
 const router = Router();
 
@@ -18,7 +19,7 @@ const router = Router();
 router.post(
   "/:requestId/generate",
   authenticateJWT,
-  authorizeRole("admin"),
+  authorizeRole(Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await generateCertificate(req, res);
@@ -49,7 +50,7 @@ router.get("/verify/:certificateId", async (req: Request, res: Response, next: N
 router.get(
   "/my-certificates",
   authenticateJWT,
-  authorizeRole("student"),
+  authorizeRole(Role.STUDENT),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await getStudentCertificates(req, res);
@@ -67,7 +68,7 @@ router.get(
 router.get(
   "/list",
   authenticateJWT,
-  authorizeRole("admin"),
+  authorizeRole(Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await listCertificates(req, res);

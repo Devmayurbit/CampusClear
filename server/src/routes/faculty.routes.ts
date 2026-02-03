@@ -7,6 +7,7 @@ import {
   getFacultyDashboard,
 } from "../controllers/faculty.controller";
 import { authenticateJWT, authorizeRole } from "../middleware/auth";
+import { Role } from "../utils/roles";
 
 const router = Router();
 
@@ -18,7 +19,7 @@ const router = Router();
 router.get(
   "/dashboard",
   authenticateJWT,
-  authorizeRole("faculty"),
+  authorizeRole(Role.FACULTY),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await getFacultyDashboard(req, res);
@@ -36,7 +37,7 @@ router.get(
 router.get(
   "/requests",
   authenticateJWT,
-  authorizeRole("faculty"),
+  authorizeRole(Role.FACULTY),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await getFacultyRequests(req, res);
@@ -54,7 +55,7 @@ router.get(
 router.get(
   "/requests/:requestId",
   authenticateJWT,
-  authorizeRole("faculty"),
+  authorizeRole(Role.FACULTY),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await getFacultyRequestById(req, res);
@@ -72,7 +73,7 @@ router.get(
 router.put(
   "/requests/:requestId/update",
   authenticateJWT,
-  authorizeRole("faculty"),
+  authorizeRole(Role.FACULTY),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await updateRequestStatus(req, res);
@@ -90,7 +91,7 @@ router.put(
 router.get(
   "/search",
   authenticateJWT,
-  authorizeRole("faculty"),
+  authorizeRole(Role.FACULTY),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await searchStudentRequest(req, res);

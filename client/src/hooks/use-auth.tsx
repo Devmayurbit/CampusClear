@@ -1,39 +1,18 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { authApi, getAuthToken, setAuthToken, removeAuthToken, getUserData, setUserData } from "@/lib/auth";
+import { authApi, getAuthToken, setAuthToken, removeAuthToken, getUserData, setUserData, removeUserData } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-
-export interface User {
-  id: string;
-  fullName: string;
-  email: string;
-  role: "student" | "faculty" | "admin";
-  enrollmentNo?: string;
-  department?: string;
-}
-
-export interface LoginData {
-  email: string;
-  password: string;
-}
-
-export interface RegisterData {
-  fullName: string;
-  enrollmentNo: string;
-  email: string;
-  password: string;
-  program: string;
-  batch: string;
-}
+import type { User, UserRole, LoginRequest, RegisterRequest, GoogleSignInRequest } from "@/types";
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  userRole: "student" | "faculty" | "admin" | null;
-  login: (data: LoginData) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
+  userRole: UserRole | null;
+  login: (data: LoginRequest) => Promise<void>;
+  register: (data: RegisterRequest) => Promise<void>;
+  googleSignIn: (data: GoogleSignInRequest) => Promise<void>;
   logout: () => void;
 }
 
@@ -45,6 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const token = getAuthToken();
   const [userState, setUserState] = useState<User | null>(getUserData());
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Sync auth state on mount
   useEffect(() => {
@@ -54,27 +34,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserState(storedUser);
       }
     }
-  }, [token, userState]);
+    setIsInitialized(true);
+  }, []);
 
   const loginMutation = useMutation({
-    mutationFn: authApi.login,
+    mutationFn: async (data: LoginRequest) => {
+      const response = await authApi.auth.login(data);
+      return response;
+    },
     onSuccess: (response: any) => {
-      const { token, user } = response.data;
-      
+      const payload = response?.data ?? response;
+      const { token, user } = payload || {};
+
+      if (!token || !user) {
+        toast({
+          title: "Login failed",
+          description: "Unexpected server response",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Ensure role is uppercase
+      const normalizedUser: User = {
+        ...user,
+        role: (user.role?.toUpperCase() || "STUDENT") as UserRole,
+      };
+
       setAuthToken(token);
-      setUserState(user);
-      setUserData(user);
+      setUserState(normalizedUser);
+      setUserData(normalizedUser);
 
       toast({
         title: "Welcome back!",
-        description: `Logged in as ${user.role}`,
+        description: `Logged in as ${normalizedUser.role.toLowerCase()}`,
       });
 
       // Route based on role
       setTimeout(() => {
-        if (user.role === "admin") {
+        if (normalizedUser.role === "ADMIN") {
           setLocation("/admin/dashboard");
-        } else if (user.role === "faculty") {
+        } else if (normalizedUser.role === "FACULTY") {
           setLocation("/faculty/dashboard");
         } else {
           setLocation("/dashboard");
@@ -91,7 +91,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const registerMutation = useMutation({
-    mutationFn: authApi.register,
+    mutationFn: async (data: RegisterRequest) => {
+      const response = await authApi.auth.register(data);
+      return response;
+    },
     onSuccess: () => {
       toast({
         title: "Registration successful!",
@@ -111,17 +114,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
-  const login = async (data: LoginData) => {
+  const googleSignInMutation = useMutation({
+    mutationFn: async (data: GoogleSignInRequest) => {
+      const response = await authApi.auth.googleSignIn(data);
+      return response;
+    },
+    onSuccess: (response: any) => {
+      const payload = response?.data ?? response;
+      const { token, user } = payload || {};
+
+      if (!token || !user) {
+        toast({
+          title: "Google Sign-in failed",
+          description: "Unexpected server response",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Ensure role is uppercase
+      const normalizedUser: User = {
+        ...user,
+        role: (user.role?.toUpperCase() || "STUDENT") as UserRole,
+      };
+
+      setAuthToken(token);
+      setUserState(normalizedUser);
+      setUserData(normalizedUser);
+
+      toast({
+        title: "Welcome!",
+        description: "Google Sign-in successful",
+      });
+
+      // Route based on role
+      setTimeout(() => {
+        if (normalizedUser.role === "ADMIN") {
+          setLocation("/admin/dashboard");
+        } else if (normalizedUser.role === "FACULTY") {
+          setLocation("/faculty/dashboard");
+        } else {
+          setLocation("/dashboard");
+        }
+      }, 500);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Google Sign-in failed",
+        description: error.message || "Unable to sign in with Google",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const login = async (data: LoginRequest) => {
     await loginMutation.mutateAsync(data);
   };
 
-  const register = async (data: RegisterData) => {
+  const register = async (data: RegisterRequest) => {
     await registerMutation.mutateAsync(data);
+  };
+
+  const googleSignIn = async (data: GoogleSignInRequest) => {
+    await googleSignInMutation.mutateAsync(data);
   };
 
   const logout = () => {
     removeAuthToken();
-    localStorage.removeItem("user");
+    removeUserData();
     setUserState(null);
     queryClient.clear();
 
@@ -135,11 +195,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const contextValue: AuthContextType = {
     user: userState,
-    isLoading: loginMutation.isPending || registerMutation.isPending,
+    isLoading: !isInitialized || loginMutation.isPending || registerMutation.isPending || googleSignInMutation.isPending,
     isAuthenticated: !!token && !!userState,
     userRole: userState?.role || null,
     login,
     register,
+    googleSignIn,
     logout,
   };
 
@@ -161,15 +222,15 @@ export function useAuth() {
 // Helper hooks for role-based logic
 export function useIsAdmin() {
   const { userRole } = useAuth();
-  return userRole === "admin";
+  return userRole === "ADMIN";
 }
 
 export function useIsFaculty() {
   const { userRole } = useAuth();
-  return userRole === "faculty";
+  return userRole === "FACULTY";
 }
 
 export function useIsStudent() {
   const { userRole } = useAuth();
-  return userRole === "student";
+  return userRole === "STUDENT";
 }

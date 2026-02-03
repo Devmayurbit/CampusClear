@@ -1,29 +1,23 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-const DepartmentStatusSchema = new Schema(
+const ClearanceSchema = new Schema(
   {
-    status: { type: String, enum: ["PENDING", "CLEARED", "HOLD"], default: "PENDING" },
+    status: { type: String, enum: ["PENDING", "APPROVED", "REJECTED"], default: "PENDING" },
     remarks: { type: String, default: "" },
     updatedAt: { type: Date },
-    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Faculty" },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId },
   },
   { _id: false }
 );
 
 export interface NoDuesRequestDoc extends Document {
   studentId: mongoose.Types.ObjectId;
-  reason?: string;
-  departments: {
-    library: any;
-    accounts: any;
-    hostel: any;
-    lab: any;
-    tp: any;
-    sports: any;
-  };
-  verificationToken?: string;
-  verified: boolean;
-  overallStatus: "PENDING" | "APPROVED" | "REJECTED" | "HOLD";
+  overallStatus: "PENDING" | "APPROVED" | "REJECTED";
+  libraryClearance: any;
+  accountClearance: any;
+  hostelClearance: any;
+  departmentClearance: any;
+  remarks?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,20 +25,14 @@ export interface NoDuesRequestDoc extends Document {
 const NoDuesRequestSchema = new Schema<NoDuesRequestDoc>(
   {
     studentId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "Student", index: true },
-    reason: { type: String },
-    departments: {
-      library: { type: DepartmentStatusSchema, default: {} },
-      accounts: { type: DepartmentStatusSchema, default: {} },
-      hostel: { type: DepartmentStatusSchema, default: {} },
-      lab: { type: DepartmentStatusSchema, default: {} },
-      tp: { type: DepartmentStatusSchema, default: {} },
-      sports: { type: DepartmentStatusSchema, default: {} },
-    },
-    verificationToken: { type: String, sparse: true },
-    verified: { type: Boolean, default: false, index: true },
+    libraryClearance: { type: ClearanceSchema, default: {} },
+    accountClearance: { type: ClearanceSchema, default: {} },
+    hostelClearance: { type: ClearanceSchema, default: {} },
+    departmentClearance: { type: ClearanceSchema, default: {} },
+    remarks: { type: String, default: "" },
     overallStatus: {
       type: String,
-      enum: ["PENDING", "APPROVED", "REJECTED", "HOLD"],
+      enum: ["PENDING", "APPROVED", "REJECTED"],
       default: "PENDING",
       index: true,
     },

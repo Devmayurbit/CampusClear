@@ -8,6 +8,7 @@ import {
   getSystemStats,
 } from "../controllers/admin.controller";
 import { authenticateJWT, authorizeRole } from "../middleware/auth";
+import { Role } from "../utils/roles";
 
 const router = Router();
 
@@ -19,7 +20,7 @@ const router = Router();
 router.get(
   "/dashboard",
   authenticateJWT,
-  authorizeRole("admin"),
+  authorizeRole(Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await getAdminDashboard(req, res);
@@ -37,7 +38,7 @@ router.get(
 router.get(
   "/requests",
   authenticateJWT,
-  authorizeRole("admin"),
+  authorizeRole(Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await getAllRequests(req, res);
@@ -55,7 +56,7 @@ router.get(
 router.put(
   "/requests/:requestId/approve",
   authenticateJWT,
-  authorizeRole("admin"),
+  authorizeRole(Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await approveRequest(req, res);
@@ -73,7 +74,7 @@ router.put(
 router.put(
   "/requests/:requestId/reject",
   authenticateJWT,
-  authorizeRole("admin"),
+  authorizeRole(Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await rejectRequest(req, res);
@@ -91,7 +92,7 @@ router.put(
 router.get(
   "/audit-logs",
   authenticateJWT,
-  authorizeRole("admin"),
+  authorizeRole(Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await getAuditLogs(req, res);
@@ -109,7 +110,7 @@ router.get(
 router.get(
   "/stats",
   authenticateJWT,
-  authorizeRole("admin"),
+  authorizeRole(Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await getSystemStats(req, res);

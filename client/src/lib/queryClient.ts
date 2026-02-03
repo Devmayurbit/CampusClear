@@ -24,15 +24,22 @@ export async function apiRequest<T = any>(
   url: string,
   data?: unknown,
 ): Promise<T> {
-  // Build full URL with base
-  const fullUrl = url.startsWith("http") ? url : `${API_BASE_URL}/api/v1${url}`;
+  // Build full URL - if url already contains /api/v1, use as is, otherwise append prefix
+  let fullUrl: string;
+  if (url.startsWith("http")) {
+    fullUrl = url;
+  } else if (url.includes("/api/v1")) {
+    fullUrl = `${API_BASE_URL}${url}`;
+  } else {
+    fullUrl = `${API_BASE_URL}/api/v1${url}`;
+  }
 
   const headers: HeadersInit = {
     "Content-Type": "application/json",
   };
 
   // Add Authorization header if token exists
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("auth_token");
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -67,7 +74,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("auth_token");
     const headers: HeadersInit = {};
 
     if (token) {

@@ -1,25 +1,50 @@
 import { Request, Response } from "express";
-import crypto from "crypto";
 import { NoDuesRequest } from "../models/NoDuesRequest";
 import { Student } from "../models/Student";
-import { sendEmail } from "../utils/email";
+import { Faculty } from "../models/Faculty";
 import { ApiError } from "../middleware/errorHandler";
 import { logAudit } from "../services/audit.service";
+import { Role, UserRole } from "../utils/roles";
 
-export async function submitNoDuesRequest(req: Request, res: Response) {
-  const studentId = (req as any).user.userId;
-  const { reason } = req.body;
+const clearanceKeys = [
+  "libraryClearance",
+  "accountClearance",
+  "hostelClearance",
+  "departmentClearance",
+] as const;
 
-  if (!reason) {
-    throw new ApiError(400, "VALIDATION_ERROR", "Reason is required");
+function mapDepartmentToClearance(department?: string) {
+  switch (department) {
+    case "LIBRARY":
+      return "libraryClearance" as const;
+    case "ACCOUNTS":
+      return "accountClearance" as const;
+    case "HOSTEL":
+      return "hostelClearance" as const;
+    case "LAB":
+    case "TP":
+    case "SPORTS":
+    default:
+      return "departmentClearance" as const;
   }
+}
+
+function recomputeOverallStatus(request: any) {
+  const statuses = clearanceKeys.map((key) => request[key]?.status || "PENDING");
+  if (statuses.includes("REJECTED")) return "REJECTED";
+  if (statuses.every((s) => s === "APPROVED")) return "APPROVED";
+  return "PENDING";
+}
+
+export async function createNoDuesRequest(req: Request, res: Response) {
+  const studentId = (req as any).user.userId;
+  const { remarks } = req.body;
 
   const student = await Student.findById(studentId);
   if (!student) {
     throw new ApiError(404, "NOT_FOUND", "Student not found");
   }
 
-  // Check if already has pending/approved request
   const existing = await NoDuesRequest.findOne({
     studentId,
     overallStatus: { $in: ["PENDING", "APPROVED"] },
@@ -29,116 +54,54 @@ export async function submitNoDuesRequest(req: Request, res: Response) {
     throw new ApiError(400, "DUPLICATE", "You already have an active request");
   }
 
-  const verificationToken = crypto.randomBytes(32).toString("hex");
-
   const request = await NoDuesRequest.create({
     studentId,
-    reason,
-    verificationToken,
-    verified: false,
+    remarks: remarks || "",
     overallStatus: "PENDING",
-    departments: {
-      library: { status: "PENDING", remarks: "" },
-      accounts: { status: "PENDING", remarks: "" },
-      hostel: { status: "PENDING", remarks: "" },
-      lab: { status: "PENDING", remarks: "" },
-      tp: { status: "PENDING", remarks: "" },
-      sports: { status: "PENDING", remarks: "" },
-    },
+    libraryClearance: { status: "PENDING", remarks: "" },
+    accountClearance: { status: "PENDING", remarks: "" },
+    hostelClearance: { status: "PENDING", remarks: "" },
+    departmentClearance: { status: "PENDING", remarks: "" },
   });
-
-  // Send verification email
-  const verificationLink = `${process.env.FRONTEND_URL}/verify-nodues?token=${verificationToken}`;
-  try {
-    await sendEmail({
-      to: student.email,
-      subject: "Verify Your No-Dues Request - CDGI Portal",
-      html: `
-        <h1>No-Dues Request Submitted</h1>
-        <p>Hi ${student.fullName},</p>
-        <p>Your No-Dues request has been submitted. Please verify it by clicking below:</p>
-        <a href="${verificationLink}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-          Verify Request
-        </a>
-        <p><strong>Enrollment No:</strong> ${student.enrollmentNo}</p>
-        <p><strong>Reason:</strong> ${reason}</p>
-        <p>This link expires in 24 hours.</p>
-      `,
-    });
-  } catch (error) {
-    console.error("Email sending failed:", error);
-  }
 
   await logAudit({
     actorId: studentId,
-    actorRole: "student",
-    action: "SUBMIT_NODUES",
+    actorRole: Role.STUDENT,
+    action: "CREATE_NODUES",
     targetType: "NoDuesRequest",
     targetId: request._id.toString(),
   });
 
   res.status(201).json({
     success: true,
-    message: "Request submitted. Check your email to verify.",
-    data: { id: request._id },
-  });
-}
-
-export async function verifyNoDuesRequest(req: Request, res: Response) {
-  const { token } = req.body;
-
-  if (!token) {
-    throw new ApiError(400, "VALIDATION_ERROR", "Verification token required");
-  }
-
-  const request = await NoDuesRequest.findOne({ verificationToken: token });
-  if (!request) {
-    throw new ApiError(400, "INVALID_TOKEN", "Invalid or expired token");
-  }
-
-  request.verified = true;
-  request.verificationToken = undefined;
-  await request.save();
-
-  await logAudit({
-    actorId: request.studentId.toString(),
-    actorRole: "student",
-    action: "VERIFY_NODUES",
-    targetType: "NoDuesRequest",
-    targetId: request._id.toString(),
-  });
-
-  res.json({
-    success: true,
-    message: "Request verified. Departments can now review.",
-  });
-}
-
-export async function getStudentRequest(req: Request, res: Response) {
-  const studentId = (req as any).user.userId;
-
-  const request = await NoDuesRequest.findOne({ studentId })
-    .populate("studentId", "fullName enrollmentNo email")
-    .lean();
-
-  if (!request) {
-    return res.json({
-      success: true,
-      data: null,
-      message: "No active request found",
-    });
-  }
-
-  res.json({
-    success: true,
+    message: "No-Dues request created",
     data: request,
   });
 }
 
-export async function getRequestHistory(req: Request, res: Response) {
+export async function getMyNoDues(req: Request, res: Response) {
   const studentId = (req as any).user.userId;
 
-  const requests = await NoDuesRequest.find({ studentId })
+  const request = await NoDuesRequest.findOne({ studentId })
+    .populate("studentId", "fullName enrollmentNo email")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  res.json({
+    success: true,
+    data: request || null,
+  });
+}
+
+export async function getAllNoDues(req: Request, res: Response) {
+  const { status } = req.query;
+  const filter: any = {};
+  if (status) {
+    filter.overallStatus = status;
+  }
+
+  const requests = await NoDuesRequest.find(filter)
+    .populate("studentId", "fullName enrollmentNo email")
     .sort({ createdAt: -1 })
     .lean();
 
@@ -149,67 +112,99 @@ export async function getRequestHistory(req: Request, res: Response) {
   });
 }
 
-export async function updateDepartmentStatus(req: Request, res: Response) {
-  const facultyId = (req as any).user.userId;
-  const { requestId, department, status, remarks } = req.body;
+export async function approveNoDues(req: Request, res: Response) {
+  const userId = (req as any).user.userId;
+  const role = (req as any).user.role as UserRole;
+  const { id } = req.params;
+  const { remarks } = req.body;
 
-  if (!requestId || !department || !status) {
-    throw new ApiError(400, "VALIDATION_ERROR", "Missing required fields");
-  }
-
-  const validStatuses = ["PENDING", "CLEARED", "HOLD"];
-  if (!validStatuses.includes(status)) {
-    throw new ApiError(400, "VALIDATION_ERROR", "Invalid status");
-  }
-
-  const validDepts = ["library", "accounts", "hostel", "lab", "tp", "sports"];
-  if (!validDepts.includes(department)) {
-    throw new ApiError(400, "VALIDATION_ERROR", "Invalid department");
-  }
-
-  const request = await NoDuesRequest.findById(requestId);
+  const request = await NoDuesRequest.findById(id);
   if (!request) {
     throw new ApiError(404, "NOT_FOUND", "Request not found");
   }
 
-  if (!request.verified) {
-    throw new ApiError(400, "NOT_VERIFIED", "Request not verified yet");
+  if (role === Role.ADMIN) {
+    clearanceKeys.forEach((key) => {
+      request[key] = {
+        status: "APPROVED",
+        remarks: request[key]?.remarks || "",
+        updatedBy: userId,
+        updatedAt: new Date(),
+      } as any;
+    });
+  } else {
+    const faculty = await Faculty.findById(userId);
+    if (!faculty) {
+      throw new ApiError(404, "NOT_FOUND", "Faculty not found");
+    }
+    const clearanceKey = mapDepartmentToClearance(faculty.department);
+    request[clearanceKey] = {
+      status: "APPROVED",
+      remarks: remarks || "",
+      updatedBy: userId,
+      updatedAt: new Date(),
+    } as any;
   }
 
-  // Update department status
-  (request.departments as any)[department] = {
-    status,
-    remarks: remarks || "",
-    updatedBy: facultyId,
-  };
+  request.overallStatus = recomputeOverallStatus(request);
+  await request.save();
 
-  // Check if all departments are CLEARED
-  const allCleared = Object.values(request.departments as any).every(
-    (dept: any) => dept.status === "CLEARED"
-  );
+  await logAudit({
+    actorId: userId,
+    actorRole: role,
+    action: "APPROVE_NODUES",
+    targetType: "NoDuesRequest",
+    targetId: id,
+  });
 
-  if (allCleared) {
-    request.overallStatus = "APPROVED";
+  res.json({
+    success: true,
+    message: "No-Dues request approved",
+    data: request,
+  });
+}
+
+export async function rejectNoDues(req: Request, res: Response) {
+  const userId = (req as any).user.userId;
+  const role = (req as any).user.role as UserRole;
+  const { id } = req.params;
+  const { remarks } = req.body;
+
+  const request = await NoDuesRequest.findById(id);
+  if (!request) {
+    throw new ApiError(404, "NOT_FOUND", "Request not found");
+  }
+
+  if (role === Role.ADMIN) {
+    request.overallStatus = "REJECTED";
   } else {
-    const anyHold = Object.values(request.departments as any).some(
-      (dept: any) => dept.status === "HOLD"
-    );
-    request.overallStatus = anyHold ? "HOLD" : "PENDING";
+    const faculty = await Faculty.findById(userId);
+    if (!faculty) {
+      throw new ApiError(404, "NOT_FOUND", "Faculty not found");
+    }
+    const clearanceKey = mapDepartmentToClearance(faculty.department);
+    request[clearanceKey] = {
+      status: "REJECTED",
+      remarks: remarks || "",
+      updatedBy: userId,
+      updatedAt: new Date(),
+    } as any;
+    request.overallStatus = "REJECTED";
   }
 
   await request.save();
 
   await logAudit({
-    actorId: facultyId,
-    actorRole: "faculty",
-    action: "UPDATE_NODUES_STATUS",
+    actorId: userId,
+    actorRole: role,
+    action: "REJECT_NODUES",
     targetType: "NoDuesRequest",
-    targetId: requestId,
+    targetId: id,
   });
 
   res.json({
     success: true,
-    message: `${department} status updated to ${status}`,
+    message: "No-Dues request rejected",
     data: request,
   });
 }

@@ -1,27 +1,28 @@
 import { Router, Request, Response, NextFunction } from "express";
 import {
-  submitNoDuesRequest,
-  verifyNoDuesRequest,
-  getStudentRequest,
-  getRequestHistory,
-  updateDepartmentStatus,
+  createNoDuesRequest,
+  getMyNoDues,
+  getAllNoDues,
+  approveNoDues,
+  rejectNoDues,
 } from "../controllers/nodues.controller";
 import { authenticateJWT, authorizeRole } from "../middleware/auth";
+import { Role } from "../utils/roles";
 
 const router = Router();
 
 /**
- * @route   POST /api/v1/nodues/submit
- * @desc    Submit a new No-Dues request
+ * @route   POST /api/v1/nodues/create
+ * @desc    Create a new No-Dues request
  * @access  Private - Student only
  */
 router.post(
-  "/submit",
+  "/create",
   authenticateJWT,
-  authorizeRole("student"),
+  authorizeRole(Role.STUDENT),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await submitNoDuesRequest(req, res);
+      await createNoDuesRequest(req, res);
     } catch (error) {
       next(error);
     }
@@ -29,30 +30,17 @@ router.post(
 );
 
 /**
- * @route   POST /api/v1/nodues/verify
- * @desc    Verify No-Dues request with email token
- * @access  Public
- */
-router.post("/verify", async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    await verifyNoDuesRequest(req, res);
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * @route   GET /api/v1/nodues/my-request
- * @desc    Get current student's active No-Dues request
+ * @route   GET /api/v1/nodues/me
+ * @desc    Get current student's No-Dues request
  * @access  Private - Student only
  */
 router.get(
-  "/my-request",
+  "/me",
   authenticateJWT,
-  authorizeRole("student"),
+  authorizeRole(Role.STUDENT),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await getStudentRequest(req, res);
+      await getMyNoDues(req, res);
     } catch (error) {
       next(error);
     }
@@ -60,17 +48,17 @@ router.get(
 );
 
 /**
- * @route   GET /api/v1/nodues/history
- * @desc    Get student's No-Dues request history
- * @access  Private - Student only
+ * @route   GET /api/v1/nodues/all
+ * @desc    Get all No-Dues requests
+ * @access  Private - Admin only
  */
 router.get(
-  "/history",
+  "/all",
   authenticateJWT,
-  authorizeRole("student"),
+  authorizeRole(Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await getRequestHistory(req, res);
+      await getAllNoDues(req, res);
     } catch (error) {
       next(error);
     }
@@ -78,17 +66,35 @@ router.get(
 );
 
 /**
- * @route   PUT /api/v1/nodues/:requestId/department
- * @desc    Update No-Dues request department clearance status
- * @access  Private - Faculty only
+ * @route   PUT /api/v1/nodues/approve/:id
+ * @desc    Approve a No-Dues clearance (faculty/admin)
+ * @access  Private - Faculty/Admin
  */
 router.put(
-  "/:requestId/department",
+  "/approve/:id",
   authenticateJWT,
-  authorizeRole("faculty"),
+  authorizeRole(Role.FACULTY, Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await updateDepartmentStatus(req, res);
+      await approveNoDues(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   PUT /api/v1/nodues/reject/:id
+ * @desc    Reject a No-Dues clearance (faculty/admin)
+ * @access  Private - Faculty/Admin
+ */
+router.put(
+  "/reject/:id",
+  authenticateJWT,
+  authorizeRole(Role.FACULTY, Role.ADMIN),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await rejectNoDues(req, res);
     } catch (error) {
       next(error);
     }

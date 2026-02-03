@@ -5,6 +5,7 @@ import { Student } from "../models/Student";
 import { sendEmail } from "../utils/email";
 import { ApiError } from "../middleware/errorHandler";
 import { logAudit } from "../services/audit.service";
+import { Role } from "../utils/roles";
 
 function generateCertificateId(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -69,7 +70,7 @@ export async function generateCertificate(req: Request, res: Response) {
 
   await logAudit({
     actorId: adminId,
-    actorRole: "admin",
+    actorRole: Role.ADMIN,
     action: "GENERATE_CERTIFICATE",
     targetType: "Certificate",
     targetId: certificate._id.toString(),

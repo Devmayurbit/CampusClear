@@ -1,185 +1,160 @@
 import { apiRequest } from "./queryClient";
-
-export interface LoginData {
-  email: string;
-  password: string;
-}
-
-export interface RegisterData {
-  fullName: string;
-  enrollmentNo: string;
-  email: string;
-  password: string;
-  program: string;
-  batch: string;
-}
-
-export interface AuthResponse {
-  success: boolean;
-  message: string;
-  data: {
-    token: string;
-    user: {
-      id: string;
-      fullName: string;
-      email: string;
-      role: "student" | "faculty" | "admin";
-      enrollmentNo?: string;
-      department?: string;
-    };
-  };
-}
+import type {
+  AuthResponse,
+  LoginRequest,
+  RegisterRequest,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
+  GoogleSignInRequest,
+  NoDuesRequest,
+  ApproveClearanceRequest,
+} from "../types";
 
 export const authApi = {
-  // Student registration
-  register: async (data: RegisterData) => {
-    return apiRequest<AuthResponse>("POST", "/auth/register", data);
+  // Auth endpoints - /api/v1/auth/...
+  auth: {
+    register: async (data: RegisterRequest): Promise<AuthResponse> => {
+      return apiRequest<AuthResponse>("POST", "/api/v1/auth/register", data);
+    },
+
+    login: async (data: LoginRequest): Promise<AuthResponse> => {
+      return apiRequest<AuthResponse>("POST", "/api/v1/auth/login", data);
+    },
+
+    verifyEmail: async (token: string) => {
+      return apiRequest("POST", "/api/v1/auth/verify-email", { token });
+    },
+
+    forgotPassword: async (data: ForgotPasswordRequest) => {
+      return apiRequest("POST", "/api/v1/auth/forgot-password", data);
+    },
+
+    resetPassword: async (data: ResetPasswordRequest) => {
+      return apiRequest("POST", "/api/v1/auth/reset-password", data);
+    },
+
+    googleSignIn: async (data: GoogleSignInRequest): Promise<AuthResponse> => {
+      return apiRequest<AuthResponse>("POST", "/api/v1/auth/google", data);
+    },
+
+    // Admin only - create staff
+    createStaff: async (data: {
+      fullName: string;
+      email: string;
+      role: "FACULTY" | "ADMIN";
+      department?: string;
+      password: string;
+    }) => {
+      return apiRequest("POST", "/api/v1/auth/staff", data);
+    },
   },
 
-  // Universal login for all roles
-  login: async (data: LoginData) => {
-    return apiRequest<AuthResponse>("POST", "/auth/login", data);
-  },
-
-  // Email verification for student registration
-  verifyEmail: async (token: string) => {
-    return apiRequest("POST", "/auth/verify-email", { token });
-  },
-
-  // Create faculty/admin (admin only)
-  createStaff: async (data: {
-    fullName: string;
-    email: string;
-    role: "faculty" | "admin";
-    department?: string;
-    password: string;
-  }) => {
-    return apiRequest("POST", "/auth/staff", data);
-  },
-
-  // No-Dues endpoints
+  // No-Dues endpoints - /api/v1/nodues/...
   nodues: {
-    submit: async (reason: string) => {
-      return apiRequest("POST", "/nodues/submit", { reason });
+    create: async (data?: any) => {
+      return apiRequest<NoDuesRequest>("POST", "/api/v1/nodues/create", data || {});
     },
 
-    verify: async (token: string) => {
-      return apiRequest("POST", "/nodues/verify", { token });
+    getMe: async () => {
+      return apiRequest<NoDuesRequest>("GET", "/api/v1/nodues/me");
     },
 
-    getMyRequest: async () => {
-      return apiRequest("GET", "/nodues/my-request");
+    getAll: async (page?: number) => {
+      const url = page ? `/api/v1/nodues/all?page=${page}` : "/api/v1/nodues/all";
+      return apiRequest<{ data: NoDuesRequest[]; total: number }>("GET", url);
     },
 
-    getHistory: async () => {
-      return apiRequest("GET", "/nodues/history");
+    approveClearance: async (requestId: string, clearanceType: string, data?: ApproveClearanceRequest) => {
+      return apiRequest("PUT", `/api/v1/nodues/approve/${requestId}`, {
+        clearanceType,
+        ...data,
+      });
     },
 
-    updateDepartmentStatus: async (requestId: string, department: string, status: string, remarks?: string) => {
-      return apiRequest("PUT", `/nodues/${requestId}/department`, {
-        requestId,
-        department,
-        status,
+    rejectClearance: async (requestId: string, clearanceType: string, remarks?: string) => {
+      return apiRequest("PUT", `/api/v1/nodues/reject/${requestId}`, {
+        clearanceType,
         remarks,
       });
     },
   },
 
-  // Faculty endpoints
+  // Faculty endpoints - /api/v1/faculty/...
   faculty: {
     getDashboard: async () => {
-      return apiRequest("GET", "/faculty/dashboard");
+      return apiRequest("GET", "/api/v1/faculty/dashboard");
     },
 
-    getRequests: async () => {
-      return apiRequest("GET", "/faculty/requests");
+    getRequests: async (page?: number) => {
+      const url = page ? `/api/v1/faculty/requests?page=${page}` : "/api/v1/faculty/requests";
+      return apiRequest<NoDuesRequest[]>("GET", url);
     },
 
     getRequest: async (requestId: string) => {
-      return apiRequest("GET", `/faculty/requests/${requestId}`);
+      return apiRequest<NoDuesRequest>("GET", `/api/v1/faculty/requests/${requestId}`);
     },
 
-    updateStatus: async (requestId: string, status: string, remarks?: string) => {
-      return apiRequest("PUT", `/faculty/requests/${requestId}/update`, {
-        status,
-        remarks,
-      });
+    updateRequestStatus: async (
+      requestId: string,
+      data: { clearanceType: string; status: "APPROVED" | "REJECTED"; remarks?: string }
+    ) => {
+      return apiRequest("PUT", `/api/v1/faculty/requests/${requestId}/update`, data);
     },
 
     search: async (enrollmentNo: string) => {
-      return apiRequest("GET", `/faculty/search?enrollmentNo=${enrollmentNo}`);
+      return apiRequest<NoDuesRequest[]>("GET", `/api/v1/faculty/search?enrollmentNo=${enrollmentNo}`);
     },
   },
 
-  // Admin endpoints
+  // Admin endpoints - /api/v1/admin/...
   admin: {
     getDashboard: async () => {
-      return apiRequest("GET", "/admin/dashboard");
+      return apiRequest("GET", "/api/v1/admin/dashboard");
     },
 
-    getRequests: async (status?: string, page?: number) => {
+    getRequests: async (page?: number, status?: string) => {
       const params = new URLSearchParams();
-      if (status) params.append("status", status);
       if (page) params.append("page", page.toString());
-      return apiRequest("GET", `/admin/requests?${params}`);
+      if (status) params.append("status", status);
+      const query = params.toString();
+      const url = query ? `/api/v1/admin/requests?${query}` : "/api/v1/admin/requests";
+      return apiRequest<{ data: NoDuesRequest[]; total: number }>("GET", url);
     },
 
-    approveRequest: async (requestId: string) => {
-      return apiRequest("PUT", `/admin/requests/${requestId}/approve`);
+    approveRequest: async (requestId: string, remarks?: string) => {
+      return apiRequest("PUT", `/api/v1/admin/requests/${requestId}/approve`, { remarks });
     },
 
-    rejectRequest: async (requestId: string, reason: string) => {
-      return apiRequest("PUT", `/admin/requests/${requestId}/reject`, { reason });
+    rejectRequest: async (requestId: string, remarks?: string) => {
+      return apiRequest("PUT", `/api/v1/admin/requests/${requestId}/reject`, { remarks });
     },
 
     getAuditLogs: async (page?: number) => {
-      const params = page ? `?page=${page}` : "";
-      return apiRequest("GET", `/admin/audit-logs${params}`);
+      const url = page ? `/api/v1/admin/audit-logs?page=${page}` : "/api/v1/admin/audit-logs";
+      return apiRequest("GET", url);
     },
 
     getStats: async () => {
-      return apiRequest("GET", "/admin/stats");
-    },
-  },
-
-  // Certificate endpoints
-  certificate: {
-    generate: async (requestId: string) => {
-      return apiRequest("POST", `/certificate/${requestId}/generate`);
-    },
-
-    verify: async (certificateId: string) => {
-      return apiRequest("GET", `/certificate/verify/${certificateId}`);
-    },
-
-    getMyList: async () => {
-      return apiRequest("GET", "/certificate/my-certificates");
-    },
-
-    getList: async (page?: number) => {
-      const params = page ? `?page=${page}` : "";
-      return apiRequest("GET", `/certificate/list${params}`);
-    },
-
-    download: async (certificateId: string) => {
-      return apiRequest("GET", `/certificate/${certificateId}/download`);
+      return apiRequest("GET", "/api/v1/admin/stats");
     },
   },
 };
 
-export const getAuthToken = () => localStorage.getItem("token");
-export const setAuthToken = (token: string) => localStorage.setItem("token", token);
-export const removeAuthToken = () => localStorage.removeItem("token");
+// Token management
+export const getAuthToken = () => localStorage.getItem("auth_token");
+export const setAuthToken = (token: string) => localStorage.setItem("auth_token", token);
+export const removeAuthToken = () => localStorage.removeItem("auth_token");
 
-export const setUserData = (user: any) => {
-  localStorage.setItem("user", JSON.stringify(user));
-};
-
+// User data management
 export const getUserData = () => {
-  const user = localStorage.getItem("user");
+  const user = localStorage.getItem("auth_user");
   return user ? JSON.parse(user) : null;
 };
 
+export const setUserData = (user: any) => {
+  localStorage.setItem("auth_user", JSON.stringify(user));
+};
+
 export const removeUserData = () => {
-  localStorage.removeItem("user");
+  localStorage.removeItem("auth_user");
 };

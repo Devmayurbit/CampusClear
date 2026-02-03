@@ -7,7 +7,11 @@ export interface FacultyDoc extends Document {
   email: string;
   passwordHash: string;
   department: DepartmentType;
-  role: "faculty";
+  role: "FACULTY";
+  authProvider: "LOCAL" | "GOOGLE";
+  googleId?: string;
+  passwordResetToken?: string;
+  passwordResetExpires?: Date;
   isActive: boolean;
   createdAt: Date;
 }
@@ -22,7 +26,11 @@ const FacultySchema = new Schema<FacultyDoc>(
       enum: ["LIBRARY", "ACCOUNTS", "HOSTEL", "LAB", "TP", "SPORTS"],
       required: true,
     },
-    role: { type: String, default: "faculty" },
+    role: { type: String, default: "FACULTY" },
+    authProvider: { type: String, enum: ["LOCAL", "GOOGLE"], default: "LOCAL" },
+    googleId: { type: String, index: true, sparse: true },
+    passwordResetToken: { type: String },
+    passwordResetExpires: { type: Date },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

@@ -1,11 +1,10 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
-
-export type JwtRole = "student" | "faculty" | "admin";
+import { UserRole } from "./roles";
 
 export interface JwtPayload {
   userId: string;
-  role: JwtRole;
+  role: UserRole;
   email: string;
 }
 

@@ -3,9 +3,13 @@ import {
   registerStudent, 
   login, 
   createStaff, 
-  verifyEmail 
+  verifyEmail,
+  requestPasswordReset,
+  resetPassword,
+  googleSignIn
 } from "../controllers/auth.controller";
 import { authenticateJWT, authorizeRole } from "../middleware/auth";
+import { Role } from "../utils/roles";
 
 const router = Router();
 
@@ -49,6 +53,45 @@ router.post("/verify-email", async (req: Request, res: Response, next: NextFunct
 });
 
 /**
+ * @route   POST /api/v1/auth/forgot-password
+ * @desc    Request password reset
+ * @access  Public
+ */
+router.post("/forgot-password", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await requestPasswordReset(req, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   POST /api/v1/auth/reset-password
+ * @desc    Reset password using token
+ * @access  Public
+ */
+router.post("/reset-password", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await resetPassword(req, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   POST /api/v1/auth/google
+ * @desc    Google Sign-in (ID token)
+ * @access  Public
+ */
+router.post("/google", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await googleSignIn(req, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * @route   POST /api/v1/auth/staff
  * @desc    Create Faculty or Admin account
  * @access  Private - Admin only
@@ -56,7 +99,7 @@ router.post("/verify-email", async (req: Request, res: Response, next: NextFunct
 router.post(
   "/staff",
   authenticateJWT,
-  authorizeRole("admin"),
+  authorizeRole(Role.ADMIN),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await createStaff(req, res);

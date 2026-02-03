@@ -10,6 +10,8 @@ export const env = {
   mongoUri: process.env.MONGO_URI || process.env.MONGO_URL || "",
   jwtSecret: process.env.JWT_SECRET || "change_this_secret",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "24h",
+  passwordResetExpiresMinutes: Number(process.env.PASSWORD_RESET_EXPIRES_MINUTES || 60),
+  googleClientId: process.env.GOOGLE_CLIENT_ID || "",
   emailHost: process.env.EMAIL_HOST || "smtp.gmail.com",
   emailPort: Number(process.env.EMAIL_PORT || 587),
   emailSecure: process.env.EMAIL_SECURE === "true",
