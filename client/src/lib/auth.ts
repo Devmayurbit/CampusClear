@@ -10,6 +10,8 @@ import type {
   ApproveClearanceRequest,
 } from "../types";
 
+const API_BASE_URL = (import.meta as any)?.env?.VITE_API_URL || "";
+
 export const authApi = {
   // Auth endpoints - /api/v1/auth/...
   auth: {
@@ -47,6 +49,20 @@ export const authApi = {
     }) => {
       return apiRequest("POST", "/api/v1/auth/staff", data);
     },
+
+    // Public - register Faculty / Admin / HOD with setup key
+    registerStaff: async (data: {
+      fullName: string;
+      email: string;
+      role: "FACULTY" | "ADMIN" | "SUPER_ADMIN";
+      department?: string;
+      employeeId?: string;
+      designation?: string;
+      password: string;
+      adminKey: string;
+    }) => {
+      return apiRequest("POST", "/api/v1/auth/register-staff", data);
+    },
   },
 
   // No-Dues endpoints - /api/v1/nodues/...
@@ -57,6 +73,10 @@ export const authApi = {
 
     getMe: async () => {
       return apiRequest<NoDuesRequest>("GET", "/api/v1/nodues/me");
+    },
+
+    delete: async (requestId: string) => {
+      return apiRequest("DELETE", `/api/v1/nodues/${requestId}`);
     },
 
     getAll: async (page?: number) => {
@@ -104,6 +124,70 @@ export const authApi = {
     search: async (enrollmentNo: string) => {
       return apiRequest<NoDuesRequest[]>("GET", `/api/v1/faculty/search?enrollmentNo=${enrollmentNo}`);
     },
+
+    bulkUpdate: async (requestIds: string[], status: "APPROVED" | "REJECTED", remarks?: string) => {
+      return apiRequest("POST", "/api/v1/faculty/requests/bulk-update", {
+        requestIds,
+        status,
+        remarks,
+      });
+    },
+
+    getStudentDetails: async (studentId: string) => {
+      return apiRequest("GET", `/api/v1/faculty/students/${studentId}`);
+    },
+
+    exportRequests: async (filters?: { status?: string; startDate?: string; endDate?: string }) => {
+      const params = new URLSearchParams();
+      if (filters?.status) params.append("status", filters.status);
+      if (filters?.startDate) params.append("startDate", filters.startDate);
+      if (filters?.endDate) params.append("endDate", filters.endDate);
+      const query = params.toString();
+      const url = query ? `/api/v1/faculty/export?${query}` : "/api/v1/faculty/export";
+
+      const token = getAuthToken();
+      const response = await fetch(`${API_BASE_URL}${url}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) throw new Error("Export failed");
+      
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = `nodues-requests-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+    },
+
+    getFilteredRequests: async (filters?: {
+      status?: string;
+      batch?: string;
+      program?: string;
+      sortBy?: string;
+      sortOrder?: string;
+      search?: string;
+    }) => {
+      const params = new URLSearchParams();
+      if (filters?.status) params.append("status", filters.status);
+      if (filters?.batch) params.append("batch", filters.batch);
+      if (filters?.program) params.append("program", filters.program);
+      if (filters?.sortBy) params.append("sortBy", filters.sortBy);
+      if (filters?.sortOrder) params.append("sortOrder", filters.sortOrder);
+      if (filters?.search) params.append("search", filters.search);
+      const query = params.toString();
+      const url = query ? `/api/v1/faculty/requests/filtered?${query}` : "/api/v1/faculty/requests/filtered";
+      return apiRequest("GET", url);
+    },
+
+    addRemarks: async (requestId: string, remarks: string) => {
+      return apiRequest("PUT", `/api/v1/faculty/requests/${requestId}/remarks`, { remarks });
+    },
   },
 
   // Admin endpoints - /api/v1/admin/...
@@ -136,6 +220,28 @@ export const authApi = {
 
     getStats: async () => {
       return apiRequest("GET", "/api/v1/admin/stats");
+    },
+
+    getUsers: async () => {
+      return apiRequest("GET", "/api/v1/admin/users");
+    },
+
+    createUser: async (data: {
+      fullName: string;
+      email: string;
+      password: string;
+      role: "FACULTY" | "ADMIN" | "SUPER_ADMIN";
+      department?: string;
+    }) => {
+      return apiRequest("POST", "/api/v1/admin/users", data);
+    },
+
+    toggleUserStatus: async (role: string, userId: string, isActive: boolean) => {
+      return apiRequest("PATCH", `/api/v1/admin/users/${role}/${userId}/status`, { isActive });
+    },
+
+    updateFeeStatus: async (requestId: string, feeStatus: string) => {
+      return apiRequest("PATCH", `/api/v1/admin/requests/${requestId}/fee-status`, { feeStatus });
     },
   },
 };

@@ -62,7 +62,8 @@ export async function apiRequest<T = any>(
   try {
     const json = JSON.parse(text);
     // Return data from response structure or the whole response
-    return (json.data || json) as T;
+    // Use 'in' check so null/false data values are preserved correctly
+    return ('data' in json ? json.data : json) as T;
   } catch {
     return text as T;
   }
@@ -94,7 +95,7 @@ export const getQueryFn: <T>(options: {
 
     await throwIfResNotOk(res);
     const json = await res.json();
-    return json.data || json;
+    return 'data' in json ? json.data : json;
   };
 
 export const queryClient = new QueryClient({
@@ -103,7 +104,7 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      staleTime: 30000, // 30 seconds - refetch stale data on mount
       retry: false,
     },
     mutations: {

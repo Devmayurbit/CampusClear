@@ -2,8 +2,10 @@ import { Router, Request, Response, NextFunction } from "express";
 import { 
   registerStudent, 
   login, 
-  createStaff, 
+  createStaff,
+  registerStaff,
   verifyEmail,
+  verifyEmailByLink,
   requestPasswordReset,
   resetPassword,
   googleSignIn
@@ -52,6 +54,14 @@ router.post("/verify-email", async (req: Request, res: Response, next: NextFunct
   }
 });
 
+router.get("/verify-email", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await verifyEmailByLink(req, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
 /**
  * @route   POST /api/v1/auth/forgot-password
  * @desc    Request password reset
@@ -86,6 +96,19 @@ router.post("/reset-password", async (req: Request, res: Response, next: NextFun
 router.post("/google", async (req: Request, res: Response, next: NextFunction) => {
   try {
     await googleSignIn(req, res);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   POST /api/v1/auth/register-staff
+ * @desc    Public staff registration - Faculty / Admin / HOD (requires adminKey)
+ * @access  Public (setup key required)
+ */
+router.post("/register-staff", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await registerStaff(req, res);
   } catch (error) {
     next(error);
   }

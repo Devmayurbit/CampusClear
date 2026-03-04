@@ -1,6 +1,17 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-export type DepartmentType = "LIBRARY" | "ACCOUNTS" | "HOSTEL" | "LAB" | "TP" | "SPORTS";
+export type DepartmentType =
+  | "LIBRARY"
+  | "ACCOUNTS"
+  | "HOSTEL"
+  | "LAB"
+  | "TP"
+  | "SPORTS"
+  | "CSE"
+  | "IT"
+  | "ECE"
+  | "ME"
+  | "CE";
 
 export interface FacultyDoc extends Document {
   fullName: string;
@@ -12,6 +23,7 @@ export interface FacultyDoc extends Document {
   googleId?: string;
   passwordResetToken?: string;
   passwordResetExpires?: Date;
+  refreshTokenHash?: string;
   isActive: boolean;
   createdAt: Date;
 }
@@ -23,7 +35,8 @@ const FacultySchema = new Schema<FacultyDoc>(
     passwordHash: { type: String, required: true },
     department: {
       type: String,
-      enum: ["LIBRARY", "ACCOUNTS", "HOSTEL", "LAB", "TP", "SPORTS"],
+      enum: ["LIBRARY", "ACCOUNTS", "HOSTEL", "LAB", "TP", "SPORTS", "CSE", "IT", "ECE", "ME", "CE"],
+      set: (value: string) => String(value || "").trim().toUpperCase(),
       required: true,
     },
     role: { type: String, default: "FACULTY" },
@@ -31,6 +44,7 @@ const FacultySchema = new Schema<FacultyDoc>(
     googleId: { type: String, index: true, sparse: true },
     passwordResetToken: { type: String },
     passwordResetExpires: { type: Date },
+    refreshTokenHash: { type: String },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

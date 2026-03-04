@@ -4,8 +4,9 @@ import { OAuth2Client } from "google-auth-library";
 import { Student } from "../models/Student";
 import { Faculty } from "../models/Faculty";
 import { Admin } from "../models/Admin";
+import { SuperAdmin } from "../models/SuperAdmin";
 import { hashPassword, comparePassword } from "../utils/password";
-import { signToken } from "../utils/jwt";
+import { signToken, verifyToken } from "../utils/jwt";
 import { passwordResetEmailTemplate, sendEmail } from "../utils/email";
 import { ApiError } from "../middleware/errorHandler";
 import { logAudit } from "../services/audit.service";
@@ -18,6 +19,7 @@ async function findUserByEmail(email: string) {
   return (
     (await Student.findOne({ email })) ||
     (await Faculty.findOne({ email })) ||
+    (await SuperAdmin.findOne({ email })) ||
     (await Admin.findOne({ email }))
   );
 }
@@ -34,6 +36,108 @@ function sanitizeUser(user: any) {
 }
 
 export async function registerStudent(req: Request, res: Response) {
+  const requestedRole = normalizeRole(req.body?.role);
+
+  if (requestedRole && requestedRole !== Role.STUDENT) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      throw new ApiError(401, "UNAUTHORIZED", "Admin token required to create staff accounts");
+    }
+
+    let payload;
+    try {
+      payload = verifyToken(authHeader.slice(7));
+    } catch {
+      throw new ApiError(401, "UNAUTHORIZED", "Invalid admin token");
+    }
+    const actorRole = normalizeRole(payload.role);
+    if (!actorRole || (actorRole !== Role.ADMIN && actorRole !== Role.SUPER_ADMIN)) {
+      throw new ApiError(403, "FORBIDDEN", "Only admin can create staff accounts");
+    }
+
+    const fullNameFromSplit = [req.body?.firstName, req.body?.lastName].filter(Boolean).join(" ").trim();
+    const fullName = req.body?.fullName || fullNameFromSplit;
+    const email = req.body?.email;
+    const password = req.body?.password;
+
+    if (!fullName || !email || !password) {
+      throw new ApiError(400, "VALIDATION_ERROR", "Missing required fields");
+    }
+
+    const normalizedEmail = String(email).toLowerCase();
+
+    if (requestedRole === Role.FACULTY) {
+      const allowedDepartments = ["LIBRARY", "ACCOUNTS", "HOSTEL", "LAB", "TP", "SPORTS", "CSE", "IT", "ECE", "ME", "CE"];
+      const requestedDepartment = String(req.body?.department || req.body?.departmentId || "").toUpperCase();
+      const department = allowedDepartments.includes(requestedDepartment)
+        ? requestedDepartment
+        : "LAB";
+
+      const existing = await Faculty.findOne({ email: normalizedEmail });
+      if (existing) {
+        throw new ApiError(409, "DUPLICATE", "Faculty already exists");
+      }
+
+      const passwordHash = await hashPassword(password);
+      const faculty = await Faculty.create({
+        fullName,
+        email: normalizedEmail,
+        passwordHash,
+        department,
+        role: Role.FACULTY,
+        authProvider: "LOCAL",
+        isActive: true,
+      });
+
+      await logAudit({
+        actorId: payload.userId,
+        actorRole,
+        action: "CREATE_FACULTY",
+        targetType: "Faculty",
+        targetId: faculty._id.toString(),
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: "Faculty created",
+        data: { id: faculty._id },
+      });
+    }
+
+    if (requestedRole === Role.ADMIN) {
+      const existing = await Admin.findOne({ email: normalizedEmail });
+      if (existing) {
+        throw new ApiError(409, "DUPLICATE", "Admin already exists");
+      }
+
+      const passwordHash = await hashPassword(password);
+      const admin = await Admin.create({
+        fullName,
+        email: normalizedEmail,
+        passwordHash,
+        role: Role.ADMIN,
+        authProvider: "LOCAL",
+        isActive: true,
+      });
+
+      await logAudit({
+        actorId: payload.userId,
+        actorRole,
+        action: "CREATE_ADMIN",
+        targetType: "Admin",
+        targetId: admin._id.toString(),
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: "Admin created",
+        data: { id: admin._id },
+      });
+    }
+
+    throw new ApiError(400, "VALIDATION_ERROR", "Invalid role for register endpoint");
+  }
+
   const { fullName, enrollmentNo, email, password, program, batch } = req.body;
 
   if (!fullName || !enrollmentNo || !email || !password) {
@@ -64,7 +168,8 @@ export async function registerStudent(req: Request, res: Response) {
   });
 
   // Send verification email
-  const verificationLink = `${env.frontendUrl}/verify-email?token=${verificationToken}`;
+  const backendBaseUrl = env.baseUrl || "http://localhost:3000";
+  const verificationLink = `${backendBaseUrl}/api/v1/auth/verify-email?token=${verificationToken}`;
   try {
     await sendEmail({
       to: email,
@@ -92,7 +197,7 @@ export async function registerStudent(req: Request, res: Response) {
 }
 
 export async function verifyEmail(req: Request, res: Response) {
-  const { token } = req.body;
+  const token = req.body?.token || req.query?.token;
 
   if (!token) {
     throw new ApiError(400, "VALIDATION_ERROR", "Verification token required");
@@ -121,6 +226,36 @@ export async function verifyEmail(req: Request, res: Response) {
   });
 }
 
+export async function verifyEmailByLink(req: Request, res: Response) {
+  const token = req.query?.token;
+  if (!token || typeof token !== "string") {
+    return res.redirect(`${env.frontendUrl}/verify-email?status=failed`);
+  }
+
+  try {
+    const student = await Student.findOne({ verificationToken: token });
+    if (!student) {
+      return res.redirect(`${env.frontendUrl}/verify-email?status=failed`);
+    }
+
+    student.verified = true;
+    student.verificationToken = undefined;
+    await student.save();
+
+    await logAudit({
+      actorId: student._id.toString(),
+      actorRole: Role.STUDENT,
+      action: "EMAIL_VERIFIED",
+      targetType: "Student",
+      targetId: student._id.toString(),
+    });
+
+    return res.redirect(`${env.frontendUrl}/verify-email?status=success`);
+  } catch {
+    return res.redirect(`${env.frontendUrl}/verify-email?status=failed`);
+  }
+}
+
 export async function login(req: Request, res: Response) {
   const { email, password } = req.body;
 
@@ -133,11 +268,6 @@ export async function login(req: Request, res: Response) {
 
   if (!user || !("passwordHash" in user)) {
     throw new ApiError(401, "INVALID_CREDENTIALS", "Invalid email or password");
-  }
-
-  // Check if student email is verified
-  if (normalizeRole((user as any).role) === Role.STUDENT && !(user as any).verified) {
-    throw new ApiError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first");
   }
 
   if (!(user as any).passwordHash) {
@@ -243,6 +373,103 @@ export async function createStaff(req: Request, res: Response) {
       success: true,
       message: "Admin created",
       data: { id: admin._id },
+    });
+  }
+
+  throw new ApiError(400, "VALIDATION_ERROR", "Invalid role");
+}
+
+/**
+ * Public staff registration — requires admin setup key
+ */
+export async function registerStaff(req: Request, res: Response) {
+  const { fullName, email, role, department, employeeId, designation, password, adminKey } = req.body;
+  const allowedDepartments = ["LIBRARY", "ACCOUNTS", "HOSTEL", "LAB", "TP", "SPORTS", "CSE", "IT", "ECE", "ME", "CE"];
+
+  // Validate setup key
+  const validKey = env.superAdminMasterKey || env.adminAccessCode || "CDGI@2025";
+  if (!adminKey || adminKey !== validKey) {
+    throw new ApiError(403, "UNAUTHORIZED", "Invalid admin setup key. Contact your administrator.");
+  }
+
+  if (!fullName || !email || !role || !password) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Missing required fields");
+  }
+
+  const normalizedRole = normalizeRole(role);
+  if (!normalizedRole || normalizedRole === Role.STUDENT) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Invalid role. Must be FACULTY, ADMIN, or SUPER_ADMIN");
+  }
+
+  if (normalizedRole === Role.FACULTY) {
+    if (!department) throw new ApiError(400, "VALIDATION_ERROR", "Department required for faculty");
+    const normalizedDepartment = String(department).trim().toUpperCase();
+    if (!allowedDepartments.includes(normalizedDepartment)) {
+      throw new ApiError(400, "VALIDATION_ERROR", `Invalid department: ${department}`);
+    }
+    const existing = await Faculty.findOne({ email: email.toLowerCase() });
+    if (existing) throw new ApiError(409, "DUPLICATE", "Faculty already registered with this email");
+
+    const passwordHash = await hashPassword(password);
+    const faculty = await Faculty.create({
+      fullName,
+      email: email.toLowerCase(),
+      passwordHash,
+      department: normalizedDepartment,
+      role: Role.FACULTY,
+      authProvider: "LOCAL",
+      isActive: true,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Faculty account created! You can now login.",
+      data: { id: faculty._id, role: Role.FACULTY },
+    });
+  }
+
+  if (normalizedRole === Role.ADMIN) {
+    const existing = await Admin.findOne({ email: email.toLowerCase() });
+    if (existing) throw new ApiError(409, "DUPLICATE", "Admin already registered with this email");
+
+    const passwordHash = await hashPassword(password);
+    const admin = await Admin.create({
+      fullName,
+      email: email.toLowerCase(),
+      passwordHash,
+      role: Role.ADMIN,
+      authProvider: "LOCAL",
+      isActive: true,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Admin account created! You can now login.",
+      data: { id: admin._id, role: Role.ADMIN },
+    });
+  }
+
+  if (normalizedRole === Role.SUPER_ADMIN) {
+    const existing = await SuperAdmin.findOne({ email: email.toLowerCase() });
+    if (existing) throw new ApiError(409, "DUPLICATE", "HOD already registered with this email");
+
+    const passwordHash = await hashPassword(password);
+    const hod = await SuperAdmin.create({
+      fullName,
+      email: email.toLowerCase(),
+      passwordHash,
+      department: department || "",
+      employeeId: employeeId || "",
+      designation: designation || "HOD",
+      role: Role.SUPER_ADMIN,
+      authProvider: "LOCAL",
+      isActive: true,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "HOD account created! You can now login.",
+      data: { id: hod._id, role: Role.SUPER_ADMIN },
     });
   }
 

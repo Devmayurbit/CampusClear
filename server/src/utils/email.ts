@@ -52,3 +52,19 @@ export function passwordResetEmailTemplate(name: string, link: string) {
     </div>
   `;
 }
+
+export function statusChangeEmailTemplate(studentName: string, department: string, status: string, remarks?: string) {
+  const statusColor = status === "APPROVED" ? "#16a34a" : status === "REJECTED" ? "#dc2626" : "#ca8a04";
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #4f46e5;">CDGI No-Dues Portal - Status Update</h2>
+      <p>Hello <strong>${studentName}</strong>,</p>
+      <p>Your <strong>${department}</strong> department clearance status has been updated to:</p>
+      <p style="font-size: 18px; font-weight: bold; color: ${statusColor};">${status}</p>
+      ${remarks ? `<p><strong>Remarks:</strong> ${remarks}</p>` : ""}
+      <p>Please log in to the portal to view details.</p>
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+      <p style="color:#6b7280;font-size:12px;">This is an automated notification from the CDGI No-Dues Portal.</p>
+    </div>
+  `;
+}

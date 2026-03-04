@@ -1,13 +1,14 @@
 /**
  * User Types
  */
-export type UserRole = "STUDENT" | "FACULTY" | "ADMIN";
+export type UserRole = "STUDENT" | "FACULTY" | "ADMIN" | "SUPER_ADMIN";
 
 export interface User {
   id: string;
   fullName: string;
   email: string;
   role: UserRole;
+  profilePhoto?: string;
   enrollmentNo?: string;
   department?: string;
   authProvider?: "LOCAL" | "GOOGLE";
@@ -28,6 +29,19 @@ export interface RegisterRequest {
   password: string;
   program?: string;
   batch?: string;
+}
+
+export interface StaffRegisterRequest {
+  fullName: string;
+  email: string;
+  password: string;
+  role: "FACULTY" | "ADMIN" | "SUPER_ADMIN";
+  department?: string;
+  employeeId?: string;
+  designation?: string;
+  inviteCode?: string;
+  accessCode?: string;
+  masterKey?: string;
 }
 
 export interface AuthResponse {
@@ -65,15 +79,21 @@ export interface Clearance {
   updatedBy?: string;
 }
 
+export type FeeStatus = "UNPAID" | "PAID" | "WAIVED";
+
 export interface NoDuesRequest {
   _id?: string;
   id?: string;
   studentId?: string;
   overallStatus: NoDuesStatus;
   libraryClearance: Clearance;
+  labClearance: Clearance;
+  tpClearance: Clearance;
+  sportsClearance: Clearance;
   accountClearance: Clearance;
   hostelClearance: Clearance;
   departmentClearance: Clearance;
+  feeStatus?: FeeStatus;
   remarks?: string;
   createdAt?: string;
   updatedAt?: string;

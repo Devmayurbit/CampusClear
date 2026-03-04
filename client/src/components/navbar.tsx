@@ -46,7 +46,7 @@ export default function Navbar() {
               <Home size={16} /> Home
             </button>
 
-            {isAuthenticated && userRole === "student" && (
+            {isAuthenticated && userRole === "STUDENT" && (
               <>
                 <button
                   onClick={() => setLocation("/dashboard")}
@@ -64,7 +64,7 @@ export default function Navbar() {
               </>
             )}
 
-            {isAuthenticated && userRole === "admin" && (
+            {isAuthenticated && userRole === "ADMIN" && (
               <>
                 <button
                   onClick={() => setLocation("/admin/dashboard")}
@@ -81,13 +81,33 @@ export default function Navbar() {
               </>
             )}
 
-            {isAuthenticated && userRole === "faculty" && (
+            {isAuthenticated && userRole === "FACULTY" && (
               <>
                 <button
                   onClick={() => setLocation("/faculty/dashboard")}
                   className={navItem("/faculty/dashboard", location === "/faculty/dashboard")}
                 >
                   <LayoutDashboard size={16} /> Dashboard
+                </button>
+                <button
+                  onClick={() => setLocation("/profile")}
+                  className={navItem("/profile", location === "/profile")}
+                >
+                  <User size={16} /> Profile
+                </button>
+              </>
+            )}
+
+            {isAuthenticated && userRole === "SUPER_ADMIN" && (
+              <>
+                <button
+                  onClick={() => setLocation("/hod/dashboard")}
+                  className={navItem(
+                    "/hod/dashboard",
+                    location === "/hod/dashboard" || location === "/super-admin/dashboard"
+                  )}
+                >
+                  <LayoutDashboard size={16} /> HOD Dashboard
                 </button>
                 <button
                   onClick={() => setLocation("/profile")}
@@ -124,19 +144,20 @@ export default function Navbar() {
                   {user?.profilePhoto ? (
                     <img
                       src={user.profilePhoto}
+                      alt={`${user?.fullName || "User"} profile`}
                       className="h-9 w-9 rounded-full object-cover border"
                     />
                   ) : (
                     <div className="h-9 w-9 rounded-full bg-primary-200 flex items-center justify-center font-semibold">
-                      {user?.firstName?.[0] || "U"}
+                      {user?.fullName?.[0] || "U"}
                     </div>
                   )}
                   <div className="text-left">
                     <span className="text-sm font-medium text-gray-700 block">
-                      {user?.firstName} {user?.lastName}
+                      {user?.fullName}
                     </span>
                     <span className="text-xs text-gray-500 block capitalize">
-                      {userRole}
+                      {userRole?.replace("_", " ").toLowerCase()}
                     </span>
                   </div>
                 </div>

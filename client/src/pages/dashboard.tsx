@@ -1,310 +1,334 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { authApi } from "@/lib/auth";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { useLocation } from "wouter";
 import {
-  Home,
-  RefreshCw,
-  Download,
-  Calendar,
+  LayoutDashboard,
+  FileText,
+  Bell,
+  Settings,
+  ChevronRight,
   Clock,
-  ArrowRightCircle,
+  CheckCircle2,
+  XCircle,
+  Download,
+  DollarSign,
 } from "lucide-react";
 import gsap from "gsap";
+import type { NoDuesRequest } from "@/types";
 
-interface ClearanceWithDepartment {
-  id: string;
-  status: "pending" | "cleared" | "rejected";
-  requirements: string[];
-  completedRequirements: string[];
-  remarks?: string;
-  department: {
-    id: string;
-    name: string;
-    description: string;
-    color: string;
-  };
-}
+const API_BASE_URL = (import.meta as any)?.env?.VITE_API_URL || "http://localhost:3000";
 
-export default function Dashboard() {
-  const { student, isAuthenticated } = useAuth();
+export default function StudentDashboard() {
+  const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-
   const containerRef = useRef<HTMLDivElement>(null);
-  const heroCardRef = useRef<HTMLDivElement>(null);
 
-  // Redirect if not authenticated
   if (!isAuthenticated) {
     setLocation("/login");
     return null;
   }
 
-  const { data: clearances, isLoading, refetch } =
-    useQuery<ClearanceWithDepartment[]>({
-      queryKey: ["/api/clearances"],
-    });
+  // Fetch real No-Dues data
+  const { data: noDuesData, isLoading } = useQuery<NoDuesRequest | null>({
+    queryKey: ["nodues-me"],
+    queryFn: async () => {
+      return (await authApi.nodues.getMe()) as NoDuesRequest | null;
+    },
+    enabled: !!user && user.role === "STUDENT",
+  });
 
-  // ================= GSAP ANIMATIONS =================
+  // Calculate real progress from clearance data
+  const clearances = noDuesData
+    ? [
+        { key: "library", label: "Library", status: noDuesData.libraryClearance?.status || "PENDING" },
+        { key: "lab", label: "Lab", status: noDuesData.labClearance?.status || "PENDING" },
+        { key: "tp", label: "Training & Placement", status: noDuesData.tpClearance?.status || "PENDING" },
+        { key: "sports", label: "Sports", status: noDuesData.sportsClearance?.status || "PENDING" },
+        { key: "accounts", label: "Accounts", status: noDuesData.accountClearance?.status || "PENDING" },
+        { key: "hostel", label: "Hostel", status: noDuesData.hostelClearance?.status || "PENDING" },
+        { key: "department", label: "Department/HOD", status: noDuesData.departmentClearance?.status || "PENDING" },
+      ]
+    : [];
+
+  const approvedCount = clearances.filter((c) => c.status === "APPROVED").length;
+  const rejectedCount = clearances.filter((c) => c.status === "REJECTED").length;
+  const totalClearances = clearances.length || 7;
+  const progressPercent = noDuesData ? Math.round((approvedCount / totalClearances) * 100) : 0;
+  const overallStatus = noDuesData?.overallStatus || "NONE";
+  const feeStatus = noDuesData?.feeStatus || "UNPAID";
+
+  const getStatusIcon = (status: string) => {
+    if (status === "APPROVED") return CheckCircle2;
+    if (status === "REJECTED") return XCircle;
+    return Clock;
+  };
+
+  const getStatusColor = (status: string) => {
+    if (status === "APPROVED") return "text-green-500";
+    if (status === "REJECTED") return "text-red-500";
+    return "text-yellow-500";
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    if (status === "APPROVED") return "bg-green-500/20 text-green-400 border-green-500/30";
+    if (status === "REJECTED") return "bg-red-500/20 text-red-400 border-red-500/30";
+    return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+  };
+
+  const statCards = [
+    {
+      title: noDuesData ? overallStatus : "No Request",
+      value: noDuesData ? "No-Dues Status" : "Submit Request",
+      icon: FileText,
+      color: "bg-blue-500/10 border-blue-500/20",
+    },
+    {
+      title: noDuesData ? `${approvedCount} / ${totalClearances}` : "0 / 7",
+      value: "Departments Cleared",
+      icon: CheckCircle2,
+      color: "bg-green-500/10 border-green-500/20",
+    },
+    {
+      title: `${noDuesData ? totalClearances - approvedCount - rejectedCount : 0}`,
+      value: "Pending Actions",
+      icon: Clock,
+      color: "bg-yellow-500/10 border-yellow-500/20",
+    },
+    {
+      title: `${rejectedCount}`,
+      value: "Rejected",
+      icon: XCircle,
+      color: "bg-red-500/10 border-red-500/20",
+    },
+    {
+      title: noDuesData ? feeStatus : "N/A",
+      value: "Fee Status",
+      icon: DollarSign,
+      color: feeStatus === "PAID" ? "bg-green-500/10 border-green-500/20" : "bg-orange-500/10 border-orange-500/20",
+    },
+  ];
+
+  const handleDownloadCertificate = async () => {
+    if (!noDuesData || overallStatus !== "APPROVED") return;
+    try {
+      const token = localStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/certificate/my-certificates`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      const certs = json.data || json || [];
+      if (certs.length > 0) {
+        const certId = certs[0].certificateId;
+        const downloadRes = await fetch(`${API_BASE_URL}/api/v1/certificate/${certId}/download`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (downloadRes.ok) {
+          const blob = await downloadRes.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${certId}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }
+      }
+    } catch {
+      // Certificate may not be generated yet
+    }
+  };
+
   useEffect(() => {
-    if (!containerRef.current) return;
-
-    const ctx = gsap.context(() => {
-      gsap.from(".fade-up", {
-        y: 40,
-        opacity: 0,
-        duration: 0.8,
-        stagger: 0.1,
-        ease: "power3.out",
-      });
-
-      gsap.from(heroCardRef.current, {
-        scale: 0.9,
-        opacity: 0,
-        duration: 1,
-        ease: "elastic.out(1,0.4)",
-      });
-    }, containerRef);
-
-    return () => ctx.revert();
+    if (containerRef.current) {
+      const ctx = gsap.context(() => {
+        gsap.from(".fade-in-up", {
+          y: 20,
+          opacity: 0,
+          duration: 0.5,
+          stagger: 0.1,
+          ease: "power2.out",
+        });
+      }, containerRef);
+      return () => ctx.revert();
+    }
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mb-4"></div>
-          <p className="text-gray-600">Loading your dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const clearedCount =
-    clearances?.filter((c) => c.status === "cleared").length || 0;
-  const pendingCount =
-    clearances?.filter((c) => c.status === "pending").length || 0;
-  const rejectedCount =
-    clearances?.filter((c) => c.status === "rejected").length || 0;
-  const totalCount = clearances?.length || 0;
-  const progressPercentage = totalCount
-    ? Math.round((clearedCount / totalCount) * 100)
-    : 0;
-
   return (
-    <div
-      ref={containerRef}
-      className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50"
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-
-        {/* ================= HEADER ================= */}
-        <div className="mb-10 fade-up">
-          <h2 className="text-3xl font-bold text-gray-900">
-            Welcome, {student?.fullName}
-          </h2>
-          <p className="text-gray-600 mt-1">
-            Track your department clearances and submit No-Dues request
+    <div ref={containerRef} className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 text-white">
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Welcome Section */}
+        <div className="fade-in-up mb-8">
+          <h2 className="text-3xl font-bold mb-2">Welcome back, {user?.fullName || "Student"}</h2>
+          <p className="text-slate-400">
+            {user?.enrollmentNo || ""} {user?.department ? `• ${user.department}` : ""}
           </p>
         </div>
 
-        {/* ================= APPLY CARD ================= */}
-        <div
-          ref={heroCardRef}
-          onClick={() => setLocation("/nodues")}
-          className="fade-up mb-10 cursor-pointer rounded-2xl border-2 border-dashed border-indigo-400 
-                     bg-gradient-to-r from-indigo-100 via-purple-100 to-pink-100
-                     hover:shadow-2xl hover:scale-[1.02] transition-all duration-300"
-        >
-          <div className="p-8 flex flex-col md:flex-row items-center justify-between gap-6">
-            <div>
-              <h3 className="text-2xl font-bold text-indigo-700">
-                🎓 Apply for No-Dues Certificate
-              </h3>
-              <p className="text-gray-700 mt-2 max-w-xl">
-                Submit your clearance request digitally and track approval from
-                all departments in real-time. Fast, secure and paperless.
-              </p>
-            </div>
-
-            <Button className="flex items-center gap-2 text-lg px-8 py-6 bg-indigo-600 hover:bg-indigo-700">
-              Apply Now
-              <ArrowRightCircle className="w-5 h-5" />
-            </Button>
-          </div>
+        {/* Stat Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          {statCards.map((card, index) => (
+            <Card
+              key={index}
+              className={`fade-in-up ${card.color} border backdrop-blur-sm p-6 hover:shadow-lg transition-all duration-300`}
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-slate-400 mb-1">{card.title}</p>
+                  <p className="text-xl font-bold text-white">{card.value}</p>
+                </div>
+                <card.icon className="w-5 h-5 text-slate-400" />
+              </div>
+            </Card>
+          ))}
         </div>
 
-        {/* ================= GRID ================= */}
+        {/* Two Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-          {/* ================= LEFT PANEL ================= */}
-          <div className="space-y-6 fade-up">
-
-            {/* PROFILE CARD */}
-            <Card className="p-6 hover:shadow-xl transition">
-              <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-200 shadow-inner">
-                  {student?.profilePhoto ? (
-                    <img
-                      src={student.profilePhoto}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-gray-500">
-                      {student?.fullName?.charAt(0)}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <h3 className="font-bold text-lg">{student?.fullName}</h3>
-                  <p className="text-sm text-gray-600">{student?.program}</p>
-                  <p className="text-sm text-gray-500">
-                    Enrollment: {student?.enrollmentNo}
-                  </p>
-                </div>
-              </div>
+          {/* Left Sidebar */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Student Nav Card */}
+            <Card className="fade-in-up bg-slate-800/50 border-slate-700/50 backdrop-blur-sm p-6">
+              <h3 className="text-lg font-bold mb-4">Student Panel</h3>
+              <nav className="space-y-3">
+                {[
+                  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard", active: true },
+                  { icon: FileText, label: "No-Dues Form", path: "/nodues", active: false },
+                  { icon: Bell, label: "Notice Form", path: "/notice-form", active: false },
+                  { icon: Settings, label: "CDGI Sahayak", path: "/cdgi-sahayak", active: false },
+                ].map((item, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setLocation(item.path)}
+                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                      item.active
+                        ? "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400"
+                        : "text-slate-400 hover:text-white hover:bg-slate-700/50"
+                    }`}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    <span className="text-sm">{item.label}</span>
+                    {item.active && <ChevronRight className="w-4 h-4 ml-auto" />}
+                  </button>
+                ))}
+              </nav>
             </Card>
 
-            {/* PROGRESS CARD */}
-            <Card className="p-6 hover:shadow-xl transition">
-              <h3 className="font-semibold mb-3">Overall Clearance</h3>
-
-              <div className="flex justify-between text-sm mb-1">
-                <span>{clearedCount} / {totalCount} cleared</span>
-                <span>{progressPercentage}%</span>
-              </div>
-
-              <Progress value={progressPercentage} />
-
-              <div className="grid grid-cols-3 text-center mt-4">
-                <div>
-                  <p className="text-xl font-bold text-green-600">
-                    {clearedCount}
-                  </p>
-                  <p className="text-xs text-gray-500">Cleared</p>
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-yellow-600">
-                    {pendingCount}
-                  </p>
-                  <p className="text-xs text-gray-500">Pending</p>
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-red-600">
-                    {rejectedCount}
-                  </p>
-                  <p className="text-xs text-gray-500">Issues</p>
-                </div>
-              </div>
-            </Card>
-
-            {/* INFO CARD */}
-            <Card className="p-6 hover:shadow-xl transition">
-              <h3 className="font-semibold mb-4">Important Info</h3>
-
+            {/* Profile Card */}
+            <Card className="fade-in-up bg-slate-800/50 border-slate-700/50 backdrop-blur-sm p-6">
+              <h3 className="text-lg font-bold mb-4">Profile</h3>
               <div className="space-y-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-indigo-600" />
-                  Last Submission: 15 June
+                <div>
+                  <p className="text-slate-400 mb-1">Name</p>
+                  <p className="text-white font-medium">{user?.fullName || "N/A"}</p>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-orange-600" />
-                  Processing Time: 3-5 Days
+                <div>
+                  <p className="text-slate-400 mb-1">Enrollment No.</p>
+                  <p className="text-white font-medium">{user?.enrollmentNo || "N/A"}</p>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <Download className="w-4 h-4 text-green-600" />
-                  Certificate available after approval
+                <div>
+                  <p className="text-slate-400 mb-1">Department</p>
+                  <p className="text-white font-medium">{user?.department || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 mb-1">Email</p>
+                  <p className="text-white font-medium text-xs">{user?.email || "N/A"}</p>
                 </div>
               </div>
             </Card>
           </div>
 
-          {/* ================= RIGHT PANEL ================= */}
-          <div className="lg:col-span-2 fade-up">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* No-Dues Progress */}
+            <Card className="fade-in-up bg-slate-800/50 border-slate-700/50 backdrop-blur-sm p-6">
+              <h3 className="text-lg font-bold mb-6">No-Dues Approval Progress</h3>
 
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold">Department Clearances</h3>
-
-              <Button
-                onClick={() => refetch()}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Refresh
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {clearances?.map((item) => {
-                const progress =
-                  (item.completedRequirements.length /
-                    item.requirements.length) *
-                  100;
-
-                const statusColor =
-                  item.status === "cleared"
-                    ? "bg-green-500"
-                    : item.status === "rejected"
-                    ? "bg-red-500"
-                    : "bg-yellow-500";
-
-                return (
-                  <Card
-                    key={item.id}
-                    className="overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+              {isLoading ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500 mx-auto"></div>
+                  <p className="text-slate-400 mt-2 text-sm">Loading...</p>
+                </div>
+              ) : !noDuesData ? (
+                <div className="text-center py-6">
+                  <p className="text-slate-400 mb-4">You haven't submitted a No-Dues request yet.</p>
+                  <Button
+                    onClick={() => setLocation("/nodues")}
+                    className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
                   >
-                    <div
-                      className="px-4 py-3 flex justify-between items-center text-white"
-                      style={{
-                        backgroundColor:
-                          item.department.color || "#6366f1",
-                      }}
-                    >
-                      <h4 className="font-semibold">
-                        {item.department.name}
-                      </h4>
-                      <Badge className={`${statusColor} text-white capitalize`}>
-                        {item.status}
-                      </Badge>
+                    Submit No-Dues Request
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-slate-400">Overall Progress</p>
+                      <p className="text-sm font-bold text-yellow-400">{progressPercent}%</p>
                     </div>
+                    <Progress value={progressPercent} className="h-2 bg-slate-700" />
+                  </div>
 
-                    <div className="p-4 space-y-2">
-                      {item.requirements.map((req, index) => (
+                  {/* Clearance Items */}
+                  <div className="space-y-3">
+                    {clearances.map((c) => {
+                      const Icon = getStatusIcon(c.status);
+                      return (
                         <div
-                          key={index}
-                          className="flex justify-between text-sm"
+                          key={c.key}
+                          className="flex items-center justify-between p-4 rounded-lg bg-slate-700/30 border border-slate-600/50"
                         >
-                          <span>{req}</span>
-                          {item.completedRequirements.includes(req) ? (
-                            <span className="text-green-600">✓</span>
-                          ) : (
-                            <span className="text-gray-400">⏳</span>
-                          )}
+                          <div className="flex items-center gap-3">
+                            <Icon className={`w-5 h-5 ${getStatusColor(c.status)}`} />
+                            <span className="font-medium">{c.label}</span>
+                          </div>
+                          <Badge className={getStatusBadgeClass(c.status)}>{c.status}</Badge>
                         </div>
-                      ))}
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </Card>
 
-                      <Progress value={progress} className="h-2 mt-3" />
-
-                      {item.remarks && (
-                        <p className="text-xs text-gray-500 mt-2">
-                          {item.remarks}
-                        </p>
-                      )}
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
+            {/* Quick Actions */}
+            <Card className="fade-in-up bg-slate-800/50 border-slate-700/50 backdrop-blur-sm p-6">
+              <h3 className="text-lg font-bold mb-4">Quick Actions</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  onClick={() => setLocation("/nodues")}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold py-2 h-auto rounded-lg transition-all hover:scale-105"
+                >
+                  {noDuesData ? "View No-Dues Status" : "Create No-Dues Request"}
+                </Button>
+                <Button
+                  onClick={() => setLocation("/nodues")}
+                  variant="outline"
+                  className="border-slate-600 text-white hover:bg-slate-700/50"
+                >
+                  View History
+                </Button>
+                {overallStatus === "APPROVED" && (
+                  <Button
+                    onClick={handleDownloadCertificate}
+                    variant="outline"
+                    className="border-slate-600 text-white hover:bg-slate-700/50 col-span-2"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Certificate
+                  </Button>
+                )}
+              </div>
+            </Card>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

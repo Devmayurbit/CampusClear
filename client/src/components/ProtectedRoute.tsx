@@ -1,4 +1,4 @@
-import { Navigate } from "wouter";
+import { Redirect } from "wouter";
 import { useAuth, useIsAdmin, useIsFaculty, useIsStudent } from "@/hooks/use-auth";
 import type { UserRole } from "@/types";
 
@@ -16,12 +16,12 @@ export function ProtectedRoute({ children, requiredRoles, fallback }: ProtectedR
   }
 
   if (!isAuthenticated) {
-    return fallback || <Navigate to="/login" />;
+    return fallback || <Redirect to="/login" />;
   }
 
   if (requiredRoles && requiredRoles.length > 0) {
     if (!userRole || !requiredRoles.includes(userRole)) {
-      return fallback || <Navigate to="/" />;
+      return fallback || <Redirect to="/" />;
     }
   }
 
@@ -31,7 +31,7 @@ export function ProtectedRoute({ children, requiredRoles, fallback }: ProtectedR
 // Convenience components for specific roles
 export function AdminRoute({ children }: { children: React.ReactNode }) {
   return (
-    <ProtectedRoute requiredRoles={["ADMIN"]}>
+    <ProtectedRoute requiredRoles={["ADMIN", "SUPER_ADMIN"]}>
       {children}
     </ProtectedRoute>
   );

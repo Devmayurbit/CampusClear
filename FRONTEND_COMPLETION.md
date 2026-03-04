@@ -53,7 +53,7 @@ The frontend has been completely updated to integrate with the new production-re
 - Removed role selector (role determined by backend on login)
 - Added Google Sign-in button with placeholder integration
 - Added forgot password link
-- Simplified form to email + password only
+- iSmplified form to email + password only
 - Updated styling to match new branding
 
 ### 5. **Register Page** (`client/src/pages/register.tsx`)

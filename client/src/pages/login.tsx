@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Eye, EyeOff, GraduationCap } from "lucide-react";
+import { Eye, EyeOff, GraduationCap, BookOpen, Shield, Crown } from "lucide-react";
 import gsap from "gsap";
 import type { LoginRequest } from "@/types";
 
@@ -21,9 +21,9 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function Login() {
   const { login, googleSignIn, isLoading } = useAuth();
-  const [, setLocation] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+  const [roleTab, setRoleTab] = useState<"STUDENT" | "FACULTY" | "ADMIN" | "HOD">("STUDENT");
   const cardRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -59,7 +59,10 @@ export default function Login() {
   }, []);
 
   const onSubmit = async (data: LoginFormData) => {
-    await login(data);
+    await login({
+      email: data.email,
+      password: data.password,
+    } as LoginRequest);
   };
 
   const handleGoogleSignIn = async () => {
@@ -99,114 +102,129 @@ export default function Login() {
                 <GraduationCap className="w-10 h-10 text-white" />
               </div>
               <h1 ref={titleRef} className="text-3xl font-bold text-white mb-2">
-                Campus Clear
+                CDGI No-Dues
               </h1>
-              <p className="text-white/70">No-Dues Portal</p>
+              <p className="text-white/70">Management System</p>
+            </div>
+
+            {/* Role Selection Tabs */}
+            <div className="grid grid-cols-4 gap-1 mb-6 p-1 bg-white/5 rounded-xl border border-white/10">
+              {[
+                { id: "STUDENT" as const, label: "Student", icon: <GraduationCap className="w-4 h-4" /> },
+                { id: "FACULTY" as const, label: "Faculty", icon: <BookOpen className="w-4 h-4" /> },
+                { id: "ADMIN" as const, label: "Admin", icon: <Shield className="w-4 h-4" /> },
+                { id: "HOD" as const, label: "HOD", icon: <Crown className="w-4 h-4" /> },
+              ].map((role) => (
+                <button
+                  key={role.id}
+                  type="button"
+                  onClick={() => setRoleTab(role.id)}
+                  className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-xs font-medium transition-all duration-200 ${
+                    roleTab === role.id
+                      ? "bg-gradient-to-b from-purple-500 to-pink-500 text-white shadow-md"
+                      : "text-white/50 hover:text-white/80 hover:bg-white/10"
+                  }`}
+                >
+                  {role.icon}
+                  <span>{role.label}</span>
+                </button>
+              ))}
             </div>
 
             <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-              <div>
-                <Label htmlFor="email" className="text-white/90 font-medium">
-                  Email Address
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="your.email@example.com"
-                  className="mt-2 h-12 bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:bg-white/15 focus:border-purple-400 backdrop-blur-sm"
-                  {...register("email")}
-                />
-                {errors.email && (
-                  <p className="mt-1.5 text-sm text-red-400">{errors.email.message}</p>
-                )}
-              </div>
 
-              <div>
-                <Label htmlFor="password" className="text-white/90 font-medium">
-                  Password
-                </Label>
-                <div className="relative mt-2">
+                <div>
+                  <Label htmlFor="email" className="text-white/90 font-medium">
+                    Email Address
+                  </Label>
                   <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
-                    className="h-12 pr-12 bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:bg-white/15 focus:border-purple-400 backdrop-blur-sm"
-                    {...register("password")}
+                    id="email"
+                    type="email"
+                    placeholder="your.email@cdgi.edu.in"
+                    className="mt-2 h-12 bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:bg-white/15 focus:border-purple-400 backdrop-blur-sm"
+                    {...register("email")}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+                  {errors.email && (
+                    <p className="mt-1.5 text-sm text-red-400">{errors.email.message}</p>
+                  )}
                 </div>
-                {errors.password && (
-                  <p className="mt-1.5 text-sm text-red-400">{errors.password.message}</p>
-                )}
-              </div>
 
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full h-12 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <div className="flex items-center justify-center">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Signing In...
+                <div>
+                  <Label htmlFor="password" className="text-white/90 font-medium">
+                    Password
+                  </Label>
+                  <div className="relative mt-2">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter your password"
+                      className="h-12 pr-12 bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:bg-white/15 focus:border-purple-400 backdrop-blur-sm"
+                      {...register("password")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
                   </div>
-                ) : (
-                  "Sign In"
-                )}
-              </Button>
-            </form>
-
-            {/* Divider */}
-            <div className="my-6 flex items-center">
-              <div className="flex-1 h-px bg-white/20"></div>
-              <span className="px-3 text-white/60 text-sm">or</span>
-              <div className="flex-1 h-px bg-white/20"></div>
-            </div>
-
-            {/* Google Sign-in Button */}
-            <Button
-              type="button"
-              onClick={handleGoogleSignIn}
-              disabled={isLoadingGoogle}
-              className="w-full h-12 bg-white/10 text-white font-semibold hover:bg-white/20 border border-white/30 transition-all duration-300 disabled:opacity-50"
-            >
-              {isLoadingGoogle ? (
-                <div className="flex items-center justify-center">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  Signing in...
+                  {errors.password && (
+                    <p className="mt-1.5 text-sm text-red-400">{errors.password.message}</p>
+                  )}
                 </div>
-              ) : (
-                <span>Sign in with Google</span>
-              )}
-            </Button>
 
-            {/* Links */}
-            <div className="mt-6 space-y-3 text-center">
-              <Link href="/forgot-password">
-                <p className="text-white/70 hover:text-white text-sm font-medium transition-colors">
-                  Forgot Password?
-                </p>
-              </Link>
-              <p className="text-white/70 text-sm">
-                Don't have an account?{" "}
-                <Link href="/register" className="text-purple-400 hover:text-purple-300 font-semibold transition-colors">
-                  Create Account
-                </Link>
-              </p>
-            </div>
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full h-12 bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Signing In...
+                    </div>
+                  ) : "Sign In"}
+                </Button>
 
+                {/* Links */}
+                <div className="mt-6 space-y-3 text-center">
+                  <Link href="/forgot-password">
+                    <p className="text-white/70 hover:text-white text-sm font-medium transition-colors">
+                      Forgot Password?
+                    </p>
+                  </Link>
+                  <div className="pt-2 border-t border-white/10">
+                    <p className="text-white/70 text-xs mb-2">No account yet?</p>
+                    <div className="space-y-1.5 text-xs">
+                      {roleTab === "STUDENT" ? (
+                        <Link href="/register">
+                          <p className="text-yellow-400 hover:text-yellow-300 font-semibold transition-colors cursor-pointer">
+                            Register as Student
+                          </p>
+                        </Link>
+                      ) : (
+                        <Link href="/register">
+                          <p className="text-yellow-400 hover:text-yellow-300 font-semibold transition-colors cursor-pointer">
+                            Create {roleTab} Account
+                          </p>
+                        </Link>
+                      )}
+                      <p className="text-white/60">
+                        {roleTab === "STUDENT"
+                          ? "Use your enrollment number as username."
+                          : `Need admin setup key to create ${roleTab} account.`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+            </form>
             {/* Footer */}
             <div className="mt-6 pt-6 border-t border-white/10">
               <p className="text-xs text-white/50 text-center">
                 Need help? Contact{" "}
-                <a href="mailto:support@example.com" className="text-purple-400 hover:text-purple-300">
-                  support@example.com
+                <a href="mailto:support@cdgi.edu.in" className="text-yellow-400 hover:text-yellow-300">
+                  support@cdgi.edu.in
                 </a>
               </p>
             </div>

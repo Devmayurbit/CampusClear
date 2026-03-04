@@ -1,190 +1,158 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useAuth, useIsAdmin } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/use-auth";
+import { authApi } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   BarChart3,
   Users,
   FileText,
-  CheckCircle,
+  CheckCircle2,
   XCircle,
   Award,
-  LogOut,
+  Settings,
+  GraduationCap,
+  Activity,
 } from "lucide-react";
 
-async function apiRequest(method: string, path: string, body?: any) {
-  const response = await fetch(path, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${localStorage.getItem("token")}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  if (!response.ok) {
-    throw new Error((await response.json()).message);
-  }
-
-  return response;
-}
-
 export default function AdminDashboard() {
-  const { isAuthenticated, userRole, logout } = useAuth();
+  const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const isAdmin = useIsAdmin();
 
-  if (!isAuthenticated || !isAdmin) {
+  if (!user || user.role !== "ADMIN") {
     setLocation("/login");
     return null;
   }
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ["/api/v1/admin/dashboard/stats"],
+    queryKey: ["admin-dashboard-stats"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/v1/admin/dashboard/stats");
-      return res.json();
+      const [dashboard, systemStats] = await Promise.all([
+        authApi.admin.getDashboard(),
+        authApi.admin.getStats(),
+      ]);
+
+      return {
+        dashboard: dashboard || {},
+        systemStats: systemStats || {},
+      };
     },
   });
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
-
-  const statsData = stats?.data || {};
+  const dashboardData: any = stats?.dashboard || {};
+  const systemStatsData: any = stats?.systemStats || {};
+  const requestStats = dashboardData?.stats || {};
+  const userStats = systemStatsData?.users || {};
 
   const statCards = [
     {
       title: "Total Students",
-      value: statsData.totalStudents || 0,
+      value: userStats.students || 0,
       icon: Users,
-      color: "bg-blue-50 text-blue-600",
+      color: "bg-blue-500/10 border-blue-500/20",
+      iconColor: "text-blue-400",
     },
     {
       title: "Total Applications",
-      value: statsData.totalApplications || 0,
+      value: requestStats.total || 0,
       icon: FileText,
-      color: "bg-purple-50 text-purple-600",
+      color: "bg-purple-500/10 border-purple-500/20",
+      iconColor: "text-purple-400",
     },
     {
       title: "Pending Review",
-      value: statsData.pendingApplications || 0,
+      value: requestStats.pending || 0,
       icon: BarChart3,
-      color: "bg-yellow-50 text-yellow-600",
+      color: "bg-yellow-500/10 border-yellow-500/20",
+      iconColor: "text-yellow-400",
     },
     {
       title: "Approved",
-      value: statsData.approvedApplications || 0,
-      icon: CheckCircle,
-      color: "bg-green-50 text-green-600",
+      value: requestStats.approved || 0,
+      icon: CheckCircle2,
+      color: "bg-green-500/10 border-green-500/20",
+      iconColor: "text-green-400",
     },
     {
       title: "Rejected",
-      value: statsData.rejectedApplications || 0,
+      value: requestStats.rejected || 0,
       icon: XCircle,
-      color: "bg-red-50 text-red-600",
+      color: "bg-red-500/10 border-red-500/20",
+      iconColor: "text-red-400",
     },
     {
       title: "Certificates Issued",
-      value: statsData.certificatesGenerated || 0,
+      value: dashboardData?.certificatesIssued || 0,
       icon: Award,
-      color: "bg-indigo-50 text-indigo-600",
+      color: "bg-indigo-500/10 border-indigo-500/20",
+      iconColor: "text-indigo-400",
     },
   ];
 
+  const menuItems = [
+    { label: "Manage Applications", icon: FileText, path: "/admin/applications", color: "text-purple-400" },
+    { label: "Student Directory", icon: Users, path: "/admin/students", color: "text-blue-400" },
+    { label: "Departments", icon: BarChart3, path: "/admin/departments", color: "text-green-400" },
+    { label: "Audit Logs", icon: Activity, path: "/admin/audit-logs", color: "text-indigo-400" },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-10">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900">Admin Dashboard</h1>
-            <p className="text-gray-600 mt-1">System Overview & Management</p>
-          </div>
-          <Button
-            onClick={logout}
-            variant="outline"
-            className="gap-2"
-          >
-            <LogOut size={16} /> Logout
-          </Button>
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 text-white">
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Welcome Section */}
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold mb-2">Admin Panel</h2>
+          <p className="text-slate-400">System Overview & Management</p>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {statCards.map((stat) => {
             const Icon = stat.icon;
             return (
               <Card
                 key={stat.title}
-                className="p-6 hover:shadow-lg transition-shadow"
+                className={`${stat.color} border backdrop-blur-sm p-6 hover:shadow-lg transition-all`}
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-gray-600 text-sm font-medium">
-                      {stat.title}
-                    </p>
-                    <p className="text-4xl font-bold text-gray-900 mt-2">
-                      {stat.value}
-                    </p>
+                    <p className="text-sm text-slate-400 mb-1">{stat.title}</p>
+                    <p className="text-3xl font-bold text-white">{stat.value}</p>
                   </div>
-                  <div className={`p-3 rounded-lg ${stat.color}`}>
-                    <Icon size={24} />
-                  </div>
+                  <Icon className={`w-6 h-6 ${stat.iconColor}`} />
                 </div>
               </Card>
             );
           })}
         </div>
 
-        {/* Quick Actions */}
+        {/* Quick Actions Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="p-8 text-center hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => setLocation("/admin/applications")}>
-            <FileText size={32} className="mx-auto text-purple-600 mb-3" />
-            <h3 className="text-xl font-semibold mb-2">Manage Applications</h3>
-            <p className="text-gray-600 mb-4">
-              Review and approve student No-Dues applications
-            </p>
-            <Button className="w-full">View All</Button>
-          </Card>
-
-          <Card className="p-8 text-center hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => setLocation("/admin/students")}>
-            <Users size={32} className="mx-auto text-blue-600 mb-3" />
-            <h3 className="text-xl font-semibold mb-2">Student Directory</h3>
-            <p className="text-gray-600 mb-4">
-              Manage student profiles and accounts
-            </p>
-            <Button className="w-full">View All</Button>
-          </Card>
-
-          <Card className="p-8 text-center hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => setLocation("/admin/departments")}>
-            <BarChart3 size={32} className="mx-auto text-green-600 mb-3" />
-            <h3 className="text-xl font-semibold mb-2">Departments</h3>
-            <p className="text-gray-600 mb-4">
-              Manage departments and clearance requirements
-            </p>
-            <Button className="w-full">Configure</Button>
-          </Card>
-
-          <Card className="p-8 text-center hover:shadow-lg transition-shadow cursor-pointer"
-            onClick={() => setLocation("/admin/audit-logs")}>
-            <Award size={32} className="mx-auto text-indigo-600 mb-3" />
-            <h3 className="text-xl font-semibold mb-2">Audit Logs</h3>
-            <p className="text-gray-600 mb-4">
-              View system activity and user actions
-            </p>
-            <Button className="w-full">View Logs</Button>
-          </Card>
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Card
+                key={item.label}
+                onClick={() => setLocation(item.path)}
+                className="bg-slate-800/50 border-slate-700/50 backdrop-blur-sm p-8 text-center hover:shadow-lg hover:scale-105 transition-all duration-300 cursor-pointer"
+              >
+                <Icon className={`w-10 h-10 mx-auto mb-4 ${item.color}`} />
+                <h3 className="text-lg font-semibold mb-2">{item.label}</h3>
+                <p className="text-slate-400 mb-6 text-sm">
+                  {item.label === "Manage Applications" && "Review and approve student No-Dues applications"}
+                  {item.label === "Student Directory" && "Manage student profiles and accounts"}
+                  {item.label === "Departments" && "Manage departments and clearance requirements"}
+                  {item.label === "Audit Logs" && "View system activity and user actions"}
+                </p>
+                <Button className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-semibold">
+                  Access →
+                </Button>
+              </Card>
+            );
+          })}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

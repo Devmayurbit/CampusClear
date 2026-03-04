@@ -15,6 +15,7 @@ export interface StudentDoc extends Document {
   verificationToken?: string;
   passwordResetToken?: string;
   passwordResetExpires?: Date;
+  refreshTokenHash?: string;
   createdAt: Date;
 }
 
@@ -34,6 +35,7 @@ const StudentSchema = new Schema<StudentDoc>(
     verificationToken: { type: String },
     passwordResetToken: { type: String },
     passwordResetExpires: { type: Date },
+    refreshTokenHash: { type: String },
   },
   { timestamps: true }
 );

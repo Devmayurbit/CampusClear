@@ -18,6 +18,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function normalizeUserRole(role?: string): UserRole {
+  const normalized = role?.toUpperCase();
+  if (normalized === "HOD") return "SUPER_ADMIN";
+  if (normalized === "ADMIN") return "ADMIN";
+  if (normalized === "FACULTY") return "FACULTY";
+  if (normalized === "SUPER_ADMIN") return "SUPER_ADMIN";
+  return "STUDENT";
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -58,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Ensure role is uppercase
       const normalizedUser: User = {
         ...user,
-        role: (user.role?.toUpperCase() || "STUDENT") as UserRole,
+        role: normalizeUserRole(user.role),
       };
 
       setAuthToken(token);
@@ -72,7 +81,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Route based on role
       setTimeout(() => {
-        if (normalizedUser.role === "ADMIN") {
+        if (normalizedUser.role === "SUPER_ADMIN") {
+          setLocation("/super-admin/dashboard");
+        } else if (normalizedUser.role === "ADMIN") {
           setLocation("/admin/dashboard");
         } else if (normalizedUser.role === "FACULTY") {
           setLocation("/faculty/dashboard");
@@ -98,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     onSuccess: () => {
       toast({
         title: "Registration successful!",
-        description: "Please check your email to verify your account.",
+        description: "You can now login with your credentials.",
       });
 
       setTimeout(() => {
@@ -135,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Ensure role is uppercase
       const normalizedUser: User = {
         ...user,
-        role: (user.role?.toUpperCase() || "STUDENT") as UserRole,
+        role: normalizeUserRole(user.role),
       };
 
       setAuthToken(token);
@@ -149,7 +160,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Route based on role
       setTimeout(() => {
-        if (normalizedUser.role === "ADMIN") {
+        if (normalizedUser.role === "SUPER_ADMIN") {
+          setLocation("/super-admin/dashboard");
+        } else if (normalizedUser.role === "ADMIN") {
           setLocation("/admin/dashboard");
         } else if (normalizedUser.role === "FACULTY") {
           setLocation("/faculty/dashboard");
@@ -222,7 +235,7 @@ export function useAuth() {
 // Helper hooks for role-based logic
 export function useIsAdmin() {
   const { userRole } = useAuth();
-  return userRole === "ADMIN";
+  return userRole === "ADMIN" || userRole === "SUPER_ADMIN";
 }
 
 export function useIsFaculty() {

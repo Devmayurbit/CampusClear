@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export interface AuditLogDoc extends Document {
   actorId: mongoose.Types.ObjectId;
-  actorRole: "STUDENT" | "FACULTY" | "ADMIN";
+  actorRole: "STUDENT" | "FACULTY" | "ADMIN" | "SUPER_ADMIN";
   action: string;
   targetType: string;
   targetId?: string;

@@ -5,9 +5,18 @@ import {
   getAllNoDues,
   approveNoDues,
   rejectNoDues,
+  deleteNoDuesRequest,
 } from "../controllers/nodues.controller";
 import { authenticateJWT, authorizeRole } from "../middleware/auth";
 import { Role } from "../utils/roles";
+import { validateBody, validateParams } from "../middleware/validate";
+import {
+  createNoDuesSchema,
+  approveNoDuesSchema,
+  rejectNoDuesSchema,
+  noDuesIdParamsSchema,
+} from "../validation/nodues.validation";
+import { z } from "zod";
 
 const router = Router();
 
@@ -20,6 +29,7 @@ router.post(
   "/create",
   authenticateJWT,
   authorizeRole(Role.STUDENT),
+  validateBody(createNoDuesSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await createNoDuesRequest(req, res);
@@ -74,6 +84,8 @@ router.put(
   "/approve/:id",
   authenticateJWT,
   authorizeRole(Role.FACULTY, Role.ADMIN),
+  validateParams(z.object({ id: z.string() })),
+  validateBody(approveNoDuesSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await approveNoDues(req, res);
@@ -92,9 +104,30 @@ router.put(
   "/reject/:id",
   authenticateJWT,
   authorizeRole(Role.FACULTY, Role.ADMIN),
+  validateParams(z.object({ id: z.string() })),
+  validateBody(rejectNoDuesSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await rejectNoDues(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   DELETE /api/v1/nodues/:id
+ * @desc    Delete own No-Dues request (only if PENDING or REJECTED)
+ * @access  Private - Student only
+ */
+router.delete(
+  "/:id",
+  authenticateJWT,
+  authorizeRole(Role.STUDENT),
+  validateParams(noDuesIdParamsSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await deleteNoDuesRequest(req, res);
     } catch (error) {
       next(error);
     }

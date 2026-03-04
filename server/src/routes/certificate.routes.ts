@@ -95,4 +95,16 @@ router.get(
   }
 );
 
+router.get(
+  "/download/:certificateId",
+  authenticateJWT,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await downloadCertificate(req, res);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export default router;

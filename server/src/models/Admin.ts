@@ -9,6 +9,7 @@ export interface AdminDoc extends Document {
   googleId?: string;
   passwordResetToken?: string;
   passwordResetExpires?: Date;
+  refreshTokenHash?: string;
   isActive: boolean;
   createdAt: Date;
 }
@@ -23,6 +24,7 @@ const AdminSchema = new Schema<AdminDoc>(
     googleId: { type: String, index: true, sparse: true },
     passwordResetToken: { type: String },
     passwordResetExpires: { type: Date },
+    refreshTokenHash: { type: String },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

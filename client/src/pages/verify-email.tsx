@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useSearchParams } from "react-router-dom";
 import { authApi } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -11,12 +10,28 @@ export default function VerifyEmailPage() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
+  const [isFailed, setIsFailed] = useState(false);
 
-  // Get token from URL params
   const searchParams = new URLSearchParams(window.location.search);
   const token = searchParams.get("token");
+  const status = searchParams.get("status");
 
   useEffect(() => {
+    if (status === "success") {
+      setIsVerified(true);
+      toast({
+        title: "Email verified!",
+        description: "Your email has been verified. Redirecting to login...",
+      });
+      setTimeout(() => setLocation("/login"), 2000);
+      return;
+    }
+
+    if (status === "failed") {
+      setIsFailed(true);
+      return;
+    }
+
     if (!token) {
       return;
     }
@@ -39,6 +54,7 @@ export default function VerifyEmailPage() {
           throw new Error(response?.message || "Verification failed");
         }
       } catch (error: any) {
+        setIsFailed(true);
         toast({
           title: "Verification failed",
           description: error.message || "Unable to verify your email. Please try again.",
@@ -50,7 +66,7 @@ export default function VerifyEmailPage() {
     };
 
     verifyEmail();
-  }, [token, toast, setLocation]);
+  }, [token, status, toast, setLocation]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
@@ -60,7 +76,7 @@ export default function VerifyEmailPage() {
           <CardDescription>Verifying your email address...</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!token && (
+          {!token && !status && (
             <div className="text-center space-y-4">
               <p className="text-sm text-gray-600">
                 No verification token found. Please check your email for the verification link.
@@ -88,7 +104,7 @@ export default function VerifyEmailPage() {
             </div>
           )}
 
-          {token && !isLoading && !isVerified && (
+          {(isFailed || (token && !isLoading && !isVerified)) && (
             <div className="text-center space-y-4">
               <p className="text-sm text-red-600">
                 Email verification failed. The link may have expired.
