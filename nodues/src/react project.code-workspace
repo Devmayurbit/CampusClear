@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../../../react project"
+		},
+		{
+			"path": "../.."
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "nodues"
+	}
+}
